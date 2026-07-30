@@ -4,16 +4,24 @@ struct InitialTodoImporter {
 
     private let api: TodosAPI
     private let storage: CoreDataTodoStorage
+    private let stateStore: InitialTodoImportStateStore
 
     init(
         api: TodosAPI,
-        storage: CoreDataTodoStorage
+        storage: CoreDataTodoStorage,
+        stateStore: InitialTodoImportStateStore =
+            InitialTodoImportStateStore()
     ) {
         self.api = api
         self.storage = storage
+        self.stateStore = stateStore
     }
 
     func run(importedAt: Date) async throws {
+        guard !stateStore.isCompleted else {
+            return
+        }
+
         let todos = try await api.fetchTodos()
 
         let records = todos.map { todo in
@@ -28,5 +36,7 @@ struct InitialTodoImporter {
             records,
             importedAt: importedAt
         )
+
+        stateStore.markCompleted()
     }
 }
