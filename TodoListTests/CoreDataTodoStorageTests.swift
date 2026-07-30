@@ -74,4 +74,28 @@ struct CoreDataTodoStorageTests {
 
         #expect(snapshots == [expected])
     }
+    
+    @Test
+    func fetchAllReturnsMappedDomainItems() async throws {
+        let stack = CoreDataStack(inMemory: true)
+        try await stack.load()
+
+        let storage = CoreDataTodoStorage(
+            container: stack.container
+        )
+
+        let item = TodoItem(
+            id: UUID(),
+            title: "Read stored task",
+            details: "Verify StoredTodo mapping",
+            createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+            status: .completed
+        )
+
+        try await storage.create(item)
+
+        let fetchedItems = try await storage.fetchAll()
+
+        #expect(fetchedItems == [item])
+    }
 }
