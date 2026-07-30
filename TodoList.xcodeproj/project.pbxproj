@@ -26,7 +26,6 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
-				TodoList.xcdatamodeld,
 			);
 			target = 8AC84C3F301A7B8B007E09FA /* TodoList */;
 		};
