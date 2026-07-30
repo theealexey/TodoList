@@ -2,7 +2,7 @@ import Foundation
 
 enum TodoStatus: Equatable, Sendable {
     case pending
-    case complited
+    case completed
 }
 
 struct TodoItem: Identifiable, Equatable, Sendable {

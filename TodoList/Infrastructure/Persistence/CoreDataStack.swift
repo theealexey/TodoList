@@ -8,7 +8,14 @@ final class CoreDataStack {
         container = NSPersistentContainer(name: "TodoList")
 
         if inMemory {
-            let description = NSPersistentStoreDescription()
+            let storeURL = URL(
+                fileURLWithPath: NSTemporaryDirectory()
+            )
+            .appendingPathComponent(UUID().uuidString)
+
+            let description = NSPersistentStoreDescription(
+                url: storeURL
+            )
             description.type = NSInMemoryStoreType
             description.shouldAddStoreAsynchronously = false
 
