@@ -7,6 +7,23 @@ struct InitialTodoImporterTests {
 
     @Test
     func importsRemoteTodosIntoPersistentStorage() async throws {
+        let suiteName =
+            "InitialTodoImporterTests.\(UUID().uuidString)"
+
+        let defaults = try #require(
+            UserDefaults(suiteName: suiteName)
+        )
+
+        defer {
+            defaults.removePersistentDomain(
+                forName: suiteName
+            )
+        }
+
+        let stateStore = InitialTodoImportStateStore(
+            defaults: defaults
+        )
+        
         let stack = CoreDataStack(inMemory: true)
         try await stack.load()
 
@@ -60,7 +77,8 @@ struct InitialTodoImporterTests {
 
         let importer = InitialTodoImporter(
             api: api,
-            storage: storage
+            storage: storage,
+            stateStore: stateStore
         )
 
         let importedAt = Date(
