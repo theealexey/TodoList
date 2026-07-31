@@ -4,6 +4,7 @@ import UIKit
 final class TodoListViewController: UIViewController {
 
     private enum Localization {
+
         static let title = NSLocalizedString(
             "todo_list.title",
             tableName: nil,
@@ -37,15 +38,27 @@ final class TodoListViewController: UIViewController {
         )
     }
 
+    var onAddTodo: (() -> Void)?
+
     private let viewModel: TodoListViewModel
     private let todoListView = TodoListView()
 
     private var items: [TodoItem] = []
     private var loadTask: Task<Void, Never>?
 
+    private lazy var addButton = UIBarButtonItem(
+        barButtonSystemItem: .add,
+        target: self,
+        action: #selector(addButtonTapped)
+    )
+
     init(viewModel: TodoListViewModel) {
         self.viewModel = viewModel
-        super.init(nibName: nil, bundle: nil)
+
+        super.init(
+            nibName: nil,
+            bundle: nil
+        )
     }
 
     @available(*, unavailable)
@@ -71,8 +84,13 @@ final class TodoListViewController: UIViewController {
         loadTask?.cancel()
     }
 
+    func reloadTodos() {
+        loadTodos()
+    }
+
     private func configureNavigation() {
         title = Localization.title
+        navigationItem.rightBarButtonItem = addButton
     }
 
     private func configureTableView() {
@@ -111,11 +129,14 @@ final class TodoListViewController: UIViewController {
             break
 
         case .loading:
+            addButton.isEnabled = false
             todoListView.render(.loading)
 
         case .empty:
             items = []
             todoListView.tableView.reloadData()
+
+            addButton.isEnabled = true
 
             todoListView.render(
                 .empty(
@@ -126,11 +147,15 @@ final class TodoListViewController: UIViewController {
         case let .content(items):
             self.items = items
             todoListView.tableView.reloadData()
+
+            addButton.isEnabled = true
             todoListView.render(.content)
 
         case .failure:
             items = []
             todoListView.tableView.reloadData()
+
+            addButton.isEnabled = true
 
             todoListView.render(
                 .failure(
@@ -139,6 +164,11 @@ final class TodoListViewController: UIViewController {
                 )
             )
         }
+    }
+
+    @objc
+    private func addButtonTapped() {
+        onAddTodo?()
     }
 }
 
@@ -169,8 +199,11 @@ extension TodoListViewController: UITableViewDataSource {
         let item = items[indexPath.row]
 
         cell.textLabel?.text = item.title
+
         cell.detailTextLabel?.text =
-            item.details.isEmpty ? nil : item.details
+            item.details.isEmpty
+            ? nil
+            : item.details
 
         cell.accessoryType =
             item.status == .completed

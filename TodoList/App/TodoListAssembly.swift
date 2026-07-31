@@ -1,3 +1,5 @@
+import UIKit
+
 @MainActor
 struct TodoListAssembly {
 
@@ -20,8 +22,63 @@ struct TodoListAssembly {
             loadTodosUseCase: loadTodosUseCase
         )
 
-        return TodoListViewController(
+        let viewController = TodoListViewController(
             viewModel: viewModel
         )
+
+        configureCreateTodoFlow(
+            for: viewController
+        )
+
+        return viewController
+    }
+
+    private func configureCreateTodoFlow(
+        for viewController: TodoListViewController
+    ) {
+        viewController.onAddTodo = {
+            [weak viewController] in
+
+            guard let viewController else {
+                return
+            }
+
+            let createAssembly = CreateTodoAssembly(
+                container: container
+            )
+
+            let createViewController =
+                createAssembly.makeViewController()
+
+            let navigationController =
+                UINavigationController(
+                    rootViewController:
+                        createViewController
+                )
+
+            createViewController.onCancel = {
+                [weak navigationController] in
+
+                navigationController?.dismiss(
+                    animated: true
+                )
+            }
+
+            createViewController.onSaved = {
+                [weak navigationController, weak viewController]
+                _ in
+
+                navigationController?.dismiss(
+                    animated: true
+                ) {
+                    viewController?.reloadTodos()
+                }
+            }
+
+            viewController.present(
+                navigationController,
+                animated: true
+            )
+        }
     }
 }
