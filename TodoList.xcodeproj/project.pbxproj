@@ -22,6 +22,13 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		8A2D696F301CDB3A005ADE3B /* Exceptions for "TodoListTests" folder in "TodoListTests" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Untitled.swift,
+			);
+			target = 8AC84C55301A7B8D007E09FA /* TodoListTests */;
+		};
 		8AC84C68301A7B8D007E09FA /* Exceptions for "TodoList" folder in "TodoList" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -42,6 +49,9 @@
 		};
 		8AC84C59301A7B8D007E09FA /* TodoListTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				8A2D696F301CDB3A005ADE3B /* Exceptions for "TodoListTests" folder in "TodoListTests" target */,
+			);
 			path = TodoListTests;
 			sourceTree = "<group>";
 		};
