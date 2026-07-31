@@ -15,7 +15,11 @@ final class DefaultTodoRepository: TodoRepository {
         self.storage = storage
         self.currentDate = currentDate
     }
-
+    
+    func create(_ item: TodoItem) async throws {
+        try await storage.create(item)
+    }
+    
     func loadTodos() async throws -> [TodoItem] {
         try await importer.run(
             importedAt: currentDate()
