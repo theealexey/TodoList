@@ -18,8 +18,21 @@ struct TodoListAssembly {
                 .loadTodos()
         }
 
+        let toggleTodoStatusUseCase =
+            ToggleTodoStatusUseCase(
+                update: { item in
+                    try await container.prepare()
+
+                    try await container
+                        .todoRepository
+                        .update(item)
+                }
+            )
+
         let viewModel = TodoListViewModel(
-            loadTodosUseCase: loadTodosUseCase
+            loadTodosUseCase: loadTodosUseCase,
+            toggleTodoStatusUseCase:
+                toggleTodoStatusUseCase
         )
 
         let viewController = TodoListViewController(
@@ -32,7 +45,7 @@ struct TodoListAssembly {
 
         return viewController
     }
-
+    
     private func configureCreateTodoFlow(
         for viewController: TodoListViewController
     ) {

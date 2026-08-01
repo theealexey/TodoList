@@ -9,6 +9,7 @@ struct TodoImportRecord: Equatable, Sendable {
 enum CoreDataTodoStorageError: Error, Equatable, Sendable {
     case storedTodoEntityMissing
     case invalidStoredData
+    case todoNotFound(id: UUID)
 }
 
 final class CoreDataTodoStorage {
@@ -40,6 +41,47 @@ final class CoreDataTodoStorage {
                     continuation.resume()
                 } catch {
                     continuation.resume(throwing: error)
+                }
+            }
+        }
+    }
+    
+    func update(_ item: TodoItem) async throws {
+        try await withCheckedThrowingContinuation {
+            (continuation: CheckedContinuation<Void, Error>) in
+
+            container.performBackgroundTask { context in
+                do {
+                    let request = NSFetchRequest<StoredTodo>(
+                        entityName: "StoredTodo"
+                    )
+
+                    request.predicate = NSPredicate(
+                        format: "id == %@",
+                        item.id as NSUUID
+                    )
+                    request.fetchLimit = 1
+
+                    guard let storedTodo =
+                        try context.fetch(request).first
+                    else {
+                        throw CoreDataTodoStorageError.todoNotFound(
+                            id: item.id
+                        )
+                    }
+
+                    storedTodo.title = item.title
+                    storedTodo.details = item.details
+                    storedTodo.createdAt = item.createdAt
+                    storedTodo.isCompleted =
+                        item.status == .completed
+
+                    try context.save()
+                    continuation.resume()
+                } catch {
+                    continuation.resume(
+                        throwing: error
+                    )
                 }
             }
         }

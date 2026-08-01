@@ -27,4 +27,8 @@ final class DefaultTodoRepository: TodoRepository {
 
         return try await storage.fetchAll()
     }
+    
+    func update(_ item: TodoItem) async throws {
+        try await storage.update(item)
+    }
 }

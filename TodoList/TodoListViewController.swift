@@ -2,9 +2,9 @@ import UIKit
 
 @MainActor
 final class TodoListViewController: UIViewController {
-
+    
     private enum Localization {
-
+        
         static let title = NSLocalizedString(
             "todo_list.title",
             tableName: nil,
@@ -12,7 +12,7 @@ final class TodoListViewController: UIViewController {
             value: "Задачи",
             comment: "Todo list screen title"
         )
-
+        
         static let searchPlaceholder = NSLocalizedString(
             "todo_list.search.placeholder",
             tableName: nil,
@@ -20,7 +20,7 @@ final class TodoListViewController: UIViewController {
             value: "Search",
             comment: "Todo list search placeholder"
         )
-
+        
         static let emptyMessage = NSLocalizedString(
             "todo_list.empty.message",
             tableName: nil,
@@ -28,7 +28,7 @@ final class TodoListViewController: UIViewController {
             value: "Задач пока нет",
             comment: "Todo list empty state message"
         )
-
+        
         static let failureMessage = NSLocalizedString(
             "todo_list.failure.message",
             tableName: nil,
@@ -36,7 +36,7 @@ final class TodoListViewController: UIViewController {
             value: "Не удалось загрузить задачи",
             comment: "Todo list loading failure message"
         )
-
+        
         static let retryTitle = NSLocalizedString(
             "todo_list.retry.title",
             tableName: nil,
@@ -44,10 +44,16 @@ final class TodoListViewController: UIViewController {
             value: "Повторить",
             comment: "Todo list retry button title"
         )
-    }
-
+    
+    static let noResultsMessage = NSLocalizedString(
+        "todo_list.search.no_results",
+        tableName: nil,
+        bundle: .main,
+        value: "Ничего не найдено",
+        comment: "Todo list search empty result message"
+    )
+}
     var onAddTodo: (() -> Void)?
-    var onToggleTodoStatus: ((TodoItem) -> Void)?
 
     private let viewModel: TodoListViewModel
 
@@ -75,6 +81,7 @@ final class TodoListViewController: UIViewController {
 
     private var items: [TodoItem] = []
     private var loadTask: Task<Void, Never>?
+    private var statusTasks: [UUID: Task<Void, Never>] = [:]
 
     init(viewModel: TodoListViewModel) {
         self.viewModel = viewModel
@@ -129,6 +136,10 @@ final class TodoListViewController: UIViewController {
 
     deinit {
         loadTask?.cancel()
+
+        statusTasks.values.forEach { task in
+            task.cancel()
+        }
     }
 
     func reloadTodos() {
@@ -148,9 +159,8 @@ final class TodoListViewController: UIViewController {
             self?.onAddTodo?()
         }
 
-        todoListView.onSearchTextChange = { _ in
-            // Фильтрацию подключим следующим шагом
-            // через TodoListViewModel и отдельные тесты.
+        todoListView.onSearchTextChange = { [weak self] query in
+            self?.viewModel.updateSearchQuery(query)
         }
     }
 
@@ -194,7 +204,20 @@ final class TodoListViewController: UIViewController {
                         taskCountText(for: 0)
                 )
             )
+            
+        case .noResults:
+            items = []
+            todoListView.tableView.reloadData()
 
+            todoListView.render(
+                .empty(
+                    message:
+                        Localization.noResultsMessage,
+                    taskCountText:
+                        taskCountText(for: 0)
+                )
+            )
+            
         case let .content(items):
             self.items = items
             todoListView.tableView.reloadData()
@@ -223,6 +246,28 @@ final class TodoListViewController: UIViewController {
         }
     }
 
+    private func toggleStatus(
+        for item: TodoItem
+    ) {
+        guard statusTasks[item.id] == nil else {
+            return
+        }
+
+        let task = Task { [weak self] in
+            guard let self else {
+                return
+            }
+
+            await viewModel.toggleStatus(
+                for: item
+            )
+
+            statusTasks[item.id] = nil
+        }
+
+        statusTasks[item.id] = task
+    }
+    
     private func taskCountText(
         for count: Int
     ) -> String {
@@ -251,14 +296,14 @@ final class TodoListViewController: UIViewController {
 }
 
 extension TodoListViewController: UITableViewDataSource {
-
+    
     func tableView(
         _ tableView: UITableView,
         numberOfRowsInSection section: Int
     ) -> Int {
         items.count
     }
-
+    
     func tableView(
         _ tableView: UITableView,
         cellForRowAt indexPath: IndexPath
@@ -270,28 +315,28 @@ extension TodoListViewController: UITableViewDataSource {
         ) as? TodoListCell else {
             return UITableViewCell()
         }
-
+        
         let item = items[indexPath.row]
-
+        
         let configuration =
-            TodoListCell.Configuration(
-                title: item.title,
-                details: item.details,
-                dateText: dateFormatter.string(
-                    from: item.createdAt
-                ),
-                isCompleted:
-                    item.status == .completed
-            )
-
+        TodoListCell.Configuration(
+            title: item.title,
+            details: item.details,
+            dateText: dateFormatter.string(
+                from: item.createdAt
+            ),
+            isCompleted:
+                item.status == .completed
+        )
+        
         cell.configure(
             with: configuration
         )
-
+        
         cell.onStatusToggle = { [weak self] in
-            self?.onToggleTodoStatus?(item)
+            self?.toggleStatus(for: item)
         }
-
+        
         return cell
     }
 }

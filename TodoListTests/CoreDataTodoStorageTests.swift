@@ -249,4 +249,79 @@ struct CoreDataTodoStorageTests {
         )
     }
     
+    @Test
+    func updateChangesStoredTodoStatus() async throws {
+        let stack = CoreDataStack(inMemory: true)
+        try await stack.load()
+
+        let storage = CoreDataTodoStorage(
+            container: stack.container
+        )
+
+        let originalItem = TodoItem(
+            id: UUID(),
+            title: "Toggle task",
+            details: "Details",
+            createdAt: Date(
+                timeIntervalSince1970: 1_700_000_000
+            ),
+            status: .pending
+        )
+
+        try await storage.create(originalItem)
+
+        let updatedItem = TodoItem(
+            id: originalItem.id,
+            title: originalItem.title,
+            details: originalItem.details,
+            createdAt: originalItem.createdAt,
+            status: .completed
+        )
+
+        try await storage.update(updatedItem)
+
+        let items = try await storage.fetchAll()
+
+        #expect(items == [updatedItem])
+    }
+    
+    @Test
+    func updateThrowsNotFoundForMissingTodo() async {
+        let stack = CoreDataStack(inMemory: true)
+
+        let missingID = UUID()
+
+        do {
+            try await stack.load()
+
+            let storage = CoreDataTodoStorage(
+                container: stack.container
+            )
+
+            let missingItem = TodoItem(
+                id: missingID,
+                title: "Missing task",
+                details: "",
+                createdAt: Date(
+                    timeIntervalSince1970: 1_700_000_000
+                ),
+                status: .completed
+            )
+
+            try await storage.update(missingItem)
+
+            Issue.record(
+                "Expected todoNotFound error"
+            )
+        } catch let error as CoreDataTodoStorageError {
+            #expect(
+                error == .todoNotFound(id: missingID)
+            )
+        } catch {
+            Issue.record(
+                "Received unexpected error: \(error)"
+            )
+        }
+    }
+    
 }

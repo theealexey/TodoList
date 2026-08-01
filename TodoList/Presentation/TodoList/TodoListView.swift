@@ -1,6 +1,6 @@
 import UIKit
 
-final class TodoListView: UIView {
+final class TodoListView: UIView, UISearchBarDelegate {
 
     struct Texts {
         let title: String
@@ -93,6 +93,12 @@ final class TodoListView: UIView {
         ]
     )
 
+    private lazy var keyboardDismissTapGesture =
+        UITapGestureRecognizer(
+            target: self,
+            action: #selector(dismissKeyboard)
+        )
+    
     init(texts: Texts) {
         self.texts = texts
 
@@ -138,10 +144,25 @@ final class TodoListView: UIView {
         configureTableView()
         configureBottomBar()
         configureStateView()
+        configureKeyboardDismissal()
         configureHierarchy()
         configureConstraints()
 
         render(.loading)
+    }
+    
+    private func configureKeyboardDismissal() {
+        keyboardDismissTapGesture.cancelsTouchesInView = false
+        keyboardDismissTapGesture.delegate = self
+
+        addGestureRecognizer(
+            keyboardDismissTapGesture
+        )
+    }
+    
+    @objc
+    private func dismissKeyboard() {
+        endEditing(true)
     }
 
     private func configureTitle() {
@@ -489,18 +510,22 @@ final class TodoListView: UIView {
     }
 }
 
-extension TodoListView: UISearchBarDelegate {
+extension TodoListView: UIGestureRecognizerDelegate {
 
-    func searchBar(
-        _ searchBar: UISearchBar,
-        textDidChange searchText: String
-    ) {
-        onSearchTextChange?(searchText)
-    }
+    func gestureRecognizer(
+        _ gestureRecognizer: UIGestureRecognizer,
+        shouldReceive touch: UITouch
+    ) -> Bool {
+        var currentView: UIView? = touch.view
 
-    func searchBarSearchButtonClicked(
-        _ searchBar: UISearchBar
-    ) {
-        searchBar.resignFirstResponder()
+        while let view = currentView {
+            if view is UIControl {
+                return false
+            }
+
+            currentView = view.superview
+        }
+
+        return true
     }
 }

@@ -1,3 +1,5 @@
+import Foundation
+
 struct LoadTodosUseCase {
 
     typealias Load = () async throws -> [TodoItem]

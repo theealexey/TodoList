@@ -1,3 +1,4 @@
+import Foundation
 
 struct TodosResponseDTO: Decodable, Sendable {
     let todos: [TodoDTO]

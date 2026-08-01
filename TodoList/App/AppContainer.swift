@@ -1,3 +1,5 @@
+import Foundation
+
 final class AppContainer {
 
     let todoRepository: DefaultTodoRepository
