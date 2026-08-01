@@ -9,15 +9,23 @@ final class TodoListViewController: UIViewController {
             "todo_list.title",
             tableName: nil,
             bundle: .main,
-            value: "Tasks",
+            value: "Задачи",
             comment: "Todo list screen title"
+        )
+
+        static let searchPlaceholder = NSLocalizedString(
+            "todo_list.search.placeholder",
+            tableName: nil,
+            bundle: .main,
+            value: "Search",
+            comment: "Todo list search placeholder"
         )
 
         static let emptyMessage = NSLocalizedString(
             "todo_list.empty.message",
             tableName: nil,
             bundle: .main,
-            value: "No tasks yet",
+            value: "Задач пока нет",
             comment: "Todo list empty state message"
         )
 
@@ -25,7 +33,7 @@ final class TodoListViewController: UIViewController {
             "todo_list.failure.message",
             tableName: nil,
             bundle: .main,
-            value: "Could not load tasks",
+            value: "Не удалось загрузить задачи",
             comment: "Todo list loading failure message"
         )
 
@@ -33,24 +41,40 @@ final class TodoListViewController: UIViewController {
             "todo_list.retry.title",
             tableName: nil,
             bundle: .main,
-            value: "Try Again",
+            value: "Повторить",
             comment: "Todo list retry button title"
         )
     }
 
     var onAddTodo: (() -> Void)?
+    var onToggleTodoStatus: ((TodoItem) -> Void)?
 
     private let viewModel: TodoListViewModel
-    private let todoListView = TodoListView()
+
+    private lazy var todoListView = TodoListView(
+        texts: TodoListView.Texts(
+            title: Localization.title,
+            searchPlaceholder:
+                Localization.searchPlaceholder
+        )
+    )
+
+    private let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+
+        formatter.calendar = Calendar(
+            identifier: .gregorian
+        )
+        formatter.locale = Locale(
+            identifier: "en_US_POSIX"
+        )
+        formatter.dateFormat = "dd/MM/yy"
+
+        return formatter
+    }()
 
     private var items: [TodoItem] = []
     private var loadTask: Task<Void, Never>?
-
-    private lazy var addButton = UIBarButtonItem(
-        barButtonSystemItem: .add,
-        target: self,
-        action: #selector(addButtonTapped)
-    )
 
     init(viewModel: TodoListViewModel) {
         self.viewModel = viewModel
@@ -73,11 +97,34 @@ final class TodoListViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        configureNavigation()
+        overrideUserInterfaceStyle = .dark
+
         configureTableView()
         bindView()
         bindViewModel()
         loadTodos()
+    }
+
+    override func viewWillAppear(
+        _ animated: Bool
+    ) {
+        super.viewWillAppear(animated)
+
+        navigationController?.setNavigationBarHidden(
+            true,
+            animated: animated
+        )
+    }
+
+    override func viewWillDisappear(
+        _ animated: Bool
+    ) {
+        super.viewWillDisappear(animated)
+
+        navigationController?.setNavigationBarHidden(
+            false,
+            animated: animated
+        )
     }
 
     deinit {
@@ -88,11 +135,6 @@ final class TodoListViewController: UIViewController {
         loadTodos()
     }
 
-    private func configureNavigation() {
-        title = Localization.title
-        navigationItem.rightBarButtonItem = addButton
-    }
-
     private func configureTableView() {
         todoListView.tableView.dataSource = self
     }
@@ -100,6 +142,15 @@ final class TodoListViewController: UIViewController {
     private func bindView() {
         todoListView.onRetry = { [weak self] in
             self?.loadTodos()
+        }
+
+        todoListView.onAddTodo = { [weak self] in
+            self?.onAddTodo?()
+        }
+
+        todoListView.onSearchTextChange = { _ in
+            // Фильтрацию подключим следующим шагом
+            // через TodoListViewModel и отдельные тесты.
         }
     }
 
@@ -129,18 +180,18 @@ final class TodoListViewController: UIViewController {
             break
 
         case .loading:
-            addButton.isEnabled = false
             todoListView.render(.loading)
 
         case .empty:
             items = []
             todoListView.tableView.reloadData()
 
-            addButton.isEnabled = true
-
             todoListView.render(
                 .empty(
-                    message: Localization.emptyMessage
+                    message:
+                        Localization.emptyMessage,
+                    taskCountText:
+                        taskCountText(for: 0)
                 )
             )
 
@@ -148,27 +199,54 @@ final class TodoListViewController: UIViewController {
             self.items = items
             todoListView.tableView.reloadData()
 
-            addButton.isEnabled = true
-            todoListView.render(.content)
+            todoListView.render(
+                .content(
+                    taskCountText:
+                        taskCountText(
+                            for: items.count
+                        )
+                )
+            )
 
         case .failure:
             items = []
             todoListView.tableView.reloadData()
 
-            addButton.isEnabled = true
-
             todoListView.render(
                 .failure(
-                    message: Localization.failureMessage,
-                    retryTitle: Localization.retryTitle
+                    message:
+                        Localization.failureMessage,
+                    retryTitle:
+                        Localization.retryTitle
                 )
             )
         }
     }
 
-    @objc
-    private func addButtonTapped() {
-        onAddTodo?()
+    private func taskCountText(
+        for count: Int
+    ) -> String {
+        let lastTwoDigits = count % 100
+        let lastDigit = count % 10
+
+        let word: String
+
+        if (11...14).contains(lastTwoDigits) {
+            word = "задач"
+        } else {
+            switch lastDigit {
+            case 1:
+                word = "задача"
+
+            case 2...4:
+                word = "задачи"
+
+            default:
+                word = "задач"
+            }
+        }
+
+        return "\(count) \(word)"
     }
 }
 
@@ -185,32 +263,34 @@ extension TodoListViewController: UITableViewDataSource {
         _ tableView: UITableView,
         cellForRowAt indexPath: IndexPath
     ) -> UITableViewCell {
-        let reuseIdentifier = "TodoCell"
-
-        let cell =
-            tableView.dequeueReusableCell(
-                withIdentifier: reuseIdentifier
-            )
-            ?? UITableViewCell(
-                style: .subtitle,
-                reuseIdentifier: reuseIdentifier
-            )
+        guard let cell = tableView.dequeueReusableCell(
+            withIdentifier:
+                TodoListCell.reuseIdentifier,
+            for: indexPath
+        ) as? TodoListCell else {
+            return UITableViewCell()
+        }
 
         let item = items[indexPath.row]
 
-        cell.textLabel?.text = item.title
+        let configuration =
+            TodoListCell.Configuration(
+                title: item.title,
+                details: item.details,
+                dateText: dateFormatter.string(
+                    from: item.createdAt
+                ),
+                isCompleted:
+                    item.status == .completed
+            )
 
-        cell.detailTextLabel?.text =
-            item.details.isEmpty
-            ? nil
-            : item.details
+        cell.configure(
+            with: configuration
+        )
 
-        cell.accessoryType =
-            item.status == .completed
-            ? .checkmark
-            : .none
-
-        cell.selectionStyle = .none
+        cell.onStatusToggle = { [weak self] in
+            self?.onToggleTodoStatus?(item)
+        }
 
         return cell
     }
