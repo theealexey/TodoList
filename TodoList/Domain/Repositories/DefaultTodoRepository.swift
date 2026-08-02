@@ -31,4 +31,8 @@ final class DefaultTodoRepository: TodoRepository {
     func update(_ item: TodoItem) async throws {
         try await storage.update(item)
     }
+    
+    func delete(id: UUID) async throws {
+        try await storage.delete(id: id)
+    }
 }

@@ -29,10 +29,20 @@ struct TodoListAssembly {
                 }
             )
 
+        let deleteTodoUseCase = DeleteTodoUseCase(
+            delete: { id in
+                try await container.prepare()
+
+                try await container
+                    .todoRepository
+                    .delete(id: id)
+            }
+        )
+        
         let viewModel = TodoListViewModel(
             loadTodosUseCase: loadTodosUseCase,
-            toggleTodoStatusUseCase:
-                toggleTodoStatusUseCase
+            toggleTodoStatusUseCase: toggleTodoStatusUseCase,
+            deleteTodoUseCase: deleteTodoUseCase
         )
 
         let viewController = TodoListViewController(

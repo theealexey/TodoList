@@ -324,4 +324,59 @@ struct CoreDataTodoStorageTests {
         }
     }
     
+    @Test
+    func deleteRemovesExistingTodo() async throws {
+        let stack = CoreDataStack(inMemory: true)
+        try await stack.load()
+
+        let storage = CoreDataTodoStorage(
+            container: stack.container
+        )
+
+        let item = TodoItem(
+            id: UUID(),
+            title: "Delete task",
+            details: "Task details",
+            createdAt: Date(
+                timeIntervalSince1970: 1_700_000_000
+            ),
+            status: .pending
+        )
+
+        try await storage.create(item)
+        try await storage.delete(id: item.id)
+
+        let storedItems = try await storage.fetchAll()
+
+        #expect(storedItems.isEmpty)
+    }
+    
+    @Test
+    func deleteThrowsNotFoundForMissingTodo() async {
+        let stack = CoreDataStack(inMemory: true)
+        let missingID = UUID()
+
+        do {
+            try await stack.load()
+
+            let storage = CoreDataTodoStorage(
+                container: stack.container
+            )
+
+            try await storage.delete(id: missingID)
+
+            Issue.record(
+                "Expected todoNotFound error"
+            )
+        } catch let error as CoreDataTodoStorageError {
+            #expect(
+                error == .todoNotFound(id: missingID)
+            )
+        } catch {
+            Issue.record(
+                "Received unexpected error: \(error)"
+            )
+        }
+    }
+    
 }

@@ -52,7 +52,80 @@ final class TodoListViewController: UIViewController {
         value: "Ничего не найдено",
         comment: "Todo list search empty result message"
     )
+        
+        static let statusUpdateFailureMessage =
+            NSLocalizedString(
+                "todo_list.status_update.failure",
+                tableName: nil,
+                bundle: .main,
+                value: "Не удалось изменить статус задачи",
+                comment: "Todo status update failure message"
+            )
+
+        static let deleteFailureMessage =
+            NSLocalizedString(
+                "todo_list.delete.failure",
+                tableName: nil,
+                bundle: .main,
+                value: "Не удалось удалить задачу",
+                comment: "Todo deletion failure message"
+            )
+
+        static let alertOKTitle =
+            NSLocalizedString(
+                "common.ok",
+                tableName: nil,
+                bundle: .main,
+                value: "OK",
+                comment: "Alert confirmation button"
+            )
+        
+        static let shareTitle =
+            NSLocalizedString(
+                "todo_list.context_menu.share",
+                tableName: nil,
+                bundle: .main,
+                value: "Поделиться",
+                comment: "Share todo context menu action"
+            )
+
+        static let deleteTitle =
+            NSLocalizedString(
+                "todo_list.context_menu.delete",
+                tableName: nil,
+                bundle: .main,
+                value: "Удалить",
+                comment: "Delete todo context menu action"
+            )
+
+        static let deleteConfirmationTitle =
+            NSLocalizedString(
+                "todo_list.delete.confirmation.title",
+                tableName: nil,
+                bundle: .main,
+                value: "Удалить задачу?",
+                comment: "Todo deletion confirmation title"
+            )
+
+        static let deleteConfirmationMessage =
+            NSLocalizedString(
+                "todo_list.delete.confirmation.message",
+                tableName: nil,
+                bundle: .main,
+                value: "Это действие нельзя отменить.",
+                comment: "Todo deletion confirmation message"
+            )
+
+        static let cancelTitle =
+            NSLocalizedString(
+                "common.cancel",
+                tableName: nil,
+                bundle: .main,
+                value: "Отмена",
+                comment: "Cancel button title"
+            )
 }
+    
     var onAddTodo: (() -> Void)?
 
     private let viewModel: TodoListViewModel
@@ -137,8 +210,12 @@ final class TodoListViewController: UIViewController {
     deinit {
         loadTask?.cancel()
 
-        statusTasks.values.forEach { task in
-            task.cancel()
+        statusTasks.values.forEach {
+            $0.cancel()
+        }
+
+        deleteTasks.values.forEach {
+            $0.cancel()
         }
     }
 
@@ -148,6 +225,7 @@ final class TodoListViewController: UIViewController {
 
     private func configureTableView() {
         todoListView.tableView.dataSource = self
+        todoListView.tableView.delegate = self
     }
 
     private func bindView() {
@@ -162,14 +240,33 @@ final class TodoListViewController: UIViewController {
         todoListView.onSearchTextChange = { [weak self] query in
             self?.viewModel.updateSearchQuery(query)
         }
+        
     }
 
     private func bindViewModel() {
         viewModel.onStateChange = { [weak self] state in
             self?.render(state)
         }
-    }
 
+        viewModel.onActionError = { [weak self] error in
+            guard let self else {
+                return
+            }
+
+            switch error {
+            case .statusUpdateFailed:
+                showActionFailure(
+                    message: Localization.statusUpdateFailureMessage
+                )
+
+            case .deleteFailed:
+                showActionFailure(
+                    message: Localization.deleteFailureMessage
+                )
+            }
+        }
+    }
+    
     private func loadTodos() {
         loadTask?.cancel()
 
@@ -268,6 +365,91 @@ final class TodoListViewController: UIViewController {
         statusTasks[item.id] = task
     }
     
+    private func showDeleteConfirmation(
+        for item: TodoItem
+    ) {
+        let alert = UIAlertController(
+            title: Localization.deleteConfirmationTitle,
+            message: Localization.deleteConfirmationMessage,
+            preferredStyle: .alert
+        )
+
+        alert.addAction(
+            UIAlertAction(
+                title: Localization.cancelTitle,
+                style: .cancel
+            )
+        )
+
+        alert.addAction(
+            UIAlertAction(
+                title: Localization.deleteTitle,
+                style: .destructive
+            ) { [weak self] _ in
+                self?.delete(item)
+            }
+        )
+
+        present(
+            alert,
+            animated: true
+        )
+    }
+    
+    private func delete(
+        _ item: TodoItem
+    ) {
+        guard deleteTasks[item.id] == nil else {
+            return
+        }
+
+        deleteTasks[item.id] = Task {
+            [weak self] in
+
+            guard let self else {
+                return
+            }
+
+            await viewModel.delete(item)
+
+            deleteTasks[item.id] = nil
+        }
+    }
+    
+    private func share(
+        _ item: TodoItem,
+        sourceView: UIView
+    ) {
+        var activityItems: [String] = [
+            item.title
+        ]
+
+        if !item.details.isEmpty {
+            activityItems.append(item.details)
+        }
+
+        let activityViewController =
+            UIActivityViewController(
+                activityItems: activityItems,
+                applicationActivities: nil
+            )
+
+        if let popover =
+            activityViewController.popoverPresentationController {
+            popover.sourceView = sourceView
+            popover.sourceRect = sourceView.bounds
+        }
+
+        present(
+            activityViewController,
+            animated: true
+        )
+    }
+    
+    private var deleteTasks: [
+        UUID: Task<Void, Never>
+    ] = [:]
+    
     private func taskCountText(
         for count: Int
     ) -> String {
@@ -292,6 +474,28 @@ final class TodoListViewController: UIViewController {
         }
 
         return "\(count) \(word)"
+    }
+    
+    private func showActionFailure(
+        message: String
+    ) {
+        let alert = UIAlertController(
+            title: nil,
+            message: message,
+            preferredStyle: .alert
+        )
+
+        alert.addAction(
+            UIAlertAction(
+                title: Localization.alertOKTitle,
+                style: .default
+            )
+        )
+
+        present(
+            alert,
+            animated: true
+        )
     }
 }
 
@@ -338,5 +542,75 @@ extension TodoListViewController: UITableViewDataSource {
         }
         
         return cell
+    }
+}
+
+extension TodoListViewController: UITableViewDelegate {
+
+    func tableView(
+        _ tableView: UITableView,
+        contextMenuConfigurationForRowAt indexPath: IndexPath,
+        point: CGPoint
+    ) -> UIContextMenuConfiguration? {
+        guard items.indices.contains(indexPath.row) else {
+            return nil
+        }
+
+        let item = items[indexPath.row]
+
+        return UIContextMenuConfiguration(
+            identifier: item.id as NSUUID,
+            previewProvider: nil
+        ) { [weak self, weak tableView] _ in
+            guard
+                let self,
+                let tableView
+            else {
+                return nil
+            }
+
+            let shareAction = UIAction(
+                title: Localization.shareTitle,
+                image: UIImage(
+                    systemName: "square.and.arrow.up"
+                )
+            ) { [weak self, weak tableView] _ in
+                guard
+                    let self,
+                    let tableView
+                else {
+                    return
+                }
+
+                let sourceView: UIView =
+                    tableView.cellForRow(
+                        at: indexPath
+                    ) ?? tableView
+
+                self.share(
+                    item,
+                    sourceView: sourceView
+                )
+            }
+
+            let deleteAction = UIAction(
+                title: Localization.deleteTitle,
+                image: UIImage(
+                    systemName: "trash"
+                ),
+                attributes: .destructive
+            ) { [weak self] _ in
+                self?.showDeleteConfirmation(
+                    for: item
+                )
+            }
+
+            return UIMenu(
+                children: [
+                    shareAction,
+                    deleteAction
+                ]
+            )
+        }
     }
 }

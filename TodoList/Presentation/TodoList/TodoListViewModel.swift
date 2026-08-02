@@ -14,15 +14,16 @@ final class TodoListViewModel {
 
     enum ActionError: Equatable {
         case statusUpdateFailed
+        case deleteFailed
     }
 
     private let loadTodosUseCase: LoadTodosUseCase
-    private let toggleTodoStatusUseCase:
-        ToggleTodoStatusUseCase
+    private let toggleTodoStatusUseCase: ToggleTodoStatusUseCase
+    private let deleteTodoUseCase: DeleteTodoUseCase
 
     private var allItems: [TodoItem] = []
     private var searchQuery = ""
-    private var updatingItemIDs: Set<UUID> = []
+    private var processingItemIDs: Set<UUID> = []
 
     private(set) var state: State = .idle {
         didSet {
@@ -35,12 +36,12 @@ final class TodoListViewModel {
 
     init(
         loadTodosUseCase: LoadTodosUseCase,
-        toggleTodoStatusUseCase:
-            ToggleTodoStatusUseCase
+        toggleTodoStatusUseCase: ToggleTodoStatusUseCase,
+        deleteTodoUseCase: DeleteTodoUseCase
     ) {
         self.loadTodosUseCase = loadTodosUseCase
-        self.toggleTodoStatusUseCase =
-            toggleTodoStatusUseCase
+        self.toggleTodoStatusUseCase = toggleTodoStatusUseCase
+        self.deleteTodoUseCase = deleteTodoUseCase
     }
 
     func load() async {
@@ -63,18 +64,13 @@ final class TodoListViewModel {
         applySearch()
     }
 
-    func toggleStatus(
-        for item: TodoItem
-    ) async {
-        guard updatingItemIDs
-            .insert(item.id)
-            .inserted
-        else {
+    func toggleStatus(for item: TodoItem) async {
+        guard processingItemIDs.insert(item.id).inserted else {
             return
         }
 
         defer {
-            updatingItemIDs.remove(item.id)
+            processingItemIDs.remove(item.id)
         }
 
         do {
@@ -93,6 +89,28 @@ final class TodoListViewModel {
             applySearch()
         } catch {
             onActionError?(.statusUpdateFailed)
+        }
+    }
+
+    func delete(_ item: TodoItem) async {
+        guard processingItemIDs.insert(item.id).inserted else {
+            return
+        }
+
+        defer {
+            processingItemIDs.remove(item.id)
+        }
+
+        do {
+            try await deleteTodoUseCase.execute(id: item.id)
+
+            allItems.removeAll {
+                $0.id == item.id
+            }
+
+            applySearch()
+        } catch {
+            onActionError?(.deleteFailed)
         }
     }
 

@@ -12,7 +12,8 @@ struct TodoListViewModelTests {
     
     private func makeViewModel(
         items: [TodoItem],
-        update: @escaping ToggleTodoStatusUseCase.Update = { _ in }
+        update: @escaping ToggleTodoStatusUseCase.Update = { _ in },
+        delete: @escaping DeleteTodoUseCase.Delete = { _ in }
     ) -> TodoListViewModel {
         TodoListViewModel(
             loadTodosUseCase: LoadTodosUseCase {
@@ -21,6 +22,10 @@ struct TodoListViewModelTests {
             toggleTodoStatusUseCase:
                 ToggleTodoStatusUseCase(
                     update: update
+                ),
+            deleteTodoUseCase:
+                DeleteTodoUseCase(
+                    delete: delete
                 )
         )
     }
@@ -51,9 +56,12 @@ struct TodoListViewModelTests {
         let viewModel = TodoListViewModel(
             loadTodosUseCase: loadTodosUseCase,
             toggleTodoStatusUseCase:
-                toggleTodoStatusUseCase
-        )
-
+                toggleTodoStatusUseCase,
+            deleteTodoUseCase: DeleteTodoUseCase(
+                delete: { _ in }
+            )
+)
+        
         var receivedStates: [
             TodoListViewModel.State
         ] = []
@@ -91,7 +99,10 @@ struct TodoListViewModelTests {
             toggleTodoStatusUseCase:
                 ToggleTodoStatusUseCase(
                     update: { _ in }
-                )
+                ),
+            deleteTodoUseCase: DeleteTodoUseCase(
+                delete: { _ in }
+            ),
         )
         
         var receivedStates: [TodoListViewModel.State] = []
@@ -125,7 +136,10 @@ struct TodoListViewModelTests {
             toggleTodoStatusUseCase:
                 ToggleTodoStatusUseCase(
                     update: { _ in }
-                )
+                ),
+            deleteTodoUseCase: DeleteTodoUseCase(
+                delete: { _ in }
+            )
         )
         
         var receivedStates: [TodoListViewModel.State] = []
@@ -177,7 +191,10 @@ struct TodoListViewModelTests {
             toggleTodoStatusUseCase:
                 ToggleTodoStatusUseCase(
                     update: { _ in }
-                )
+                ),
+            deleteTodoUseCase: DeleteTodoUseCase(
+                delete: { _ in }
+            )
         )
         
         await viewModel.load()
@@ -227,7 +244,10 @@ struct TodoListViewModelTests {
             toggleTodoStatusUseCase:
                 ToggleTodoStatusUseCase(
                     update: { _ in }
-                )
+                ),
+            deleteTodoUseCase: DeleteTodoUseCase(
+                delete: { _ in }
+            )
         )
         
         await viewModel.load()
@@ -259,7 +279,10 @@ struct TodoListViewModelTests {
             toggleTodoStatusUseCase:
                 ToggleTodoStatusUseCase(
                     update: { _ in }
-                )
+                ),
+            deleteTodoUseCase: DeleteTodoUseCase(
+                delete: { _ in }
+            )
         )
         
         await viewModel.load()
@@ -300,7 +323,10 @@ struct TodoListViewModelTests {
             toggleTodoStatusUseCase:
                 ToggleTodoStatusUseCase(
                     update: { _ in }
-                )
+                ),
+            deleteTodoUseCase: DeleteTodoUseCase(
+                delete: { _ in }
+            )
         )
 
         await viewModel.load()
@@ -348,7 +374,10 @@ struct TodoListViewModelTests {
                     update: { _ in
                         throw TestError.updateFailed
                     }
-                )
+                ),
+            deleteTodoUseCase: DeleteTodoUseCase(
+                delete: { _ in }
+            )
         )
 
         var receivedError:
@@ -365,5 +394,135 @@ struct TodoListViewModelTests {
         #expect(
             receivedError == .statusUpdateFailed
         )
+    }
+    
+    @Test
+    func deleteRemovesItemAndPreservesSearch() async {
+        let firstItem = TodoItem(
+            id: UUID(),
+            title: "Buy milk",
+            details: "",
+            createdAt: Date(
+                timeIntervalSince1970: 1_700_000_000
+            ),
+            status: .pending
+        )
+
+        let secondItem = TodoItem(
+            id: UUID(),
+            title: "Clean apartment",
+            details: "",
+            createdAt: Date(
+                timeIntervalSince1970: 1_800_000_000
+            ),
+            status: .pending
+        )
+
+        let viewModel = TodoListViewModel(
+            loadTodosUseCase: LoadTodosUseCase {
+                [firstItem, secondItem]
+            },
+            toggleTodoStatusUseCase:
+                ToggleTodoStatusUseCase(
+                    update: { _ in }
+                ),
+            deleteTodoUseCase:
+                DeleteTodoUseCase(
+                    delete: { _ in }
+                )
+        )
+
+        await viewModel.load()
+        viewModel.updateSearchQuery("clean")
+
+        await viewModel.delete(secondItem)
+
+        #expect(viewModel.state == .noResults)
+
+        viewModel.updateSearchQuery("")
+
+        #expect(
+            viewModel.state == .content([firstItem])
+        )
+    }
+    
+    @Test
+    func deleteLastItemTransitionsToEmpty() async {
+        let item = TodoItem(
+            id: UUID(),
+            title: "Only task",
+            details: "",
+            createdAt: Date(
+                timeIntervalSince1970: 1_700_000_000
+            ),
+            status: .pending
+        )
+
+        let viewModel = TodoListViewModel(
+            loadTodosUseCase: LoadTodosUseCase {
+                [item]
+            },
+            toggleTodoStatusUseCase:
+                ToggleTodoStatusUseCase(
+                    update: { _ in }
+                ),
+            deleteTodoUseCase:
+                DeleteTodoUseCase(
+                    delete: { _ in }
+                )
+        )
+
+        await viewModel.load()
+        await viewModel.delete(item)
+
+        #expect(viewModel.state == .empty)
+    }
+    
+    @Test
+    func deleteFailureKeepsCurrentItems() async {
+        enum TestError: Error {
+            case deleteFailed
+        }
+
+        let item = TodoItem(
+            id: UUID(),
+            title: "Keep task",
+            details: "",
+            createdAt: Date(
+                timeIntervalSince1970: 1_700_000_000
+            ),
+            status: .pending
+        )
+
+        let viewModel = TodoListViewModel(
+            loadTodosUseCase: LoadTodosUseCase {
+                [item]
+            },
+            toggleTodoStatusUseCase:
+                ToggleTodoStatusUseCase(
+                    update: { _ in }
+                ),
+            deleteTodoUseCase:
+                DeleteTodoUseCase(
+                    delete: { _ in
+                        throw TestError.deleteFailed
+                    }
+                )
+        )
+
+        var receivedError:
+            TodoListViewModel.ActionError?
+
+        viewModel.onActionError = { error in
+            receivedError = error
+        }
+
+        await viewModel.load()
+        await viewModel.delete(item)
+
+        #expect(
+            viewModel.state == .content([item])
+        )
+        #expect(receivedError == .deleteFailed)
     }
 }

@@ -87,6 +87,43 @@ final class CoreDataTodoStorage {
         }
     }
     
+    func delete(id: UUID) async throws {
+        try await withCheckedThrowingContinuation {
+            (continuation: CheckedContinuation<Void, Error>) in
+
+            container.performBackgroundTask { context in
+                do {
+                    let request = NSFetchRequest<StoredTodo>(
+                        entityName: "StoredTodo"
+                    )
+
+                    request.predicate = NSPredicate(
+                        format: "id == %@",
+                        id as NSUUID
+                    )
+                    request.fetchLimit = 1
+
+                    guard let storedTodo =
+                        try context.fetch(request).first
+                    else {
+                        throw CoreDataTodoStorageError.todoNotFound(
+                            id: id
+                        )
+                    }
+
+                    context.delete(storedTodo)
+                    try context.save()
+
+                    continuation.resume()
+                } catch {
+                    continuation.resume(
+                        throwing: error
+                    )
+                }
+            }
+        }
+    }
+    
     func createImportedTodo(
         remoteID: Int,
         title: String,
