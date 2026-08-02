@@ -1,18 +1,18 @@
 import UIKit
 
 final class TodoListCell: UITableViewCell {
-
+    
     struct Configuration: Equatable {
         let title: String
         let details: String
         let dateText: String
         let isCompleted: Bool
     }
-
+    
     static let reuseIdentifier = "TodoListCell"
-
+    
     var onStatusToggle: (() -> Void)?
-
+    
     private enum Layout {
         static let horizontalInset: CGFloat = 20
         static let verticalInset: CGFloat = 16
@@ -20,7 +20,7 @@ final class TodoListCell: UITableViewCell {
         static let contentSpacing: CGFloat = 12
         static let textSpacing: CGFloat = 6
     }
-
+    
     private enum Palette {
         static var accent: UIColor {
             UIColor(
@@ -30,37 +30,37 @@ final class TodoListCell: UITableViewCell {
                 alpha: 1
             )
         }
-
+        
         static var primaryText: UIColor {
             UIColor(white: 0.96, alpha: 1)
         }
-
+        
         static var secondaryText: UIColor {
             UIColor(white: 0.72, alpha: 1)
         }
-
+        
         static var completedText: UIColor {
             UIColor(white: 0.40, alpha: 1)
         }
-
+        
         static var pendingBorder: UIColor {
             UIColor(white: 0.30, alpha: 1)
         }
-
+        
         static var separator: UIColor {
             UIColor(white: 0.18, alpha: 1)
         }
     }
-
+    
     private let statusButton = ExpandedHitAreaButton(
         type: .system
     )
-
+    
     private let titleLabel = UILabel()
     private let detailsLabel = UILabel()
     private let dateLabel = UILabel()
     private let separatorView = UIView()
-
+    
     private lazy var textStackView = UIStackView(
         arrangedSubviews: [
             titleLabel,
@@ -68,7 +68,7 @@ final class TodoListCell: UITableViewCell {
             dateLabel
         ]
     )
-
+    
     override init(
         style: UITableViewCell.CellStyle,
         reuseIdentifier: String?
@@ -77,82 +77,91 @@ final class TodoListCell: UITableViewCell {
             style: style,
             reuseIdentifier: reuseIdentifier
         )
-
+        
         configure()
     }
-
+    
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         return nil
     }
-
+    
     override func prepareForReuse() {
         super.prepareForReuse()
-
+        
         onStatusToggle = nil
-
-        titleLabel.text = nil
+        
         titleLabel.attributedText = nil
         detailsLabel.text = nil
         dateLabel.text = nil
+        
+        statusButton.setImage(
+            nil,
+            for: .normal
+        )
     }
-
+    
     func configure(
         with configuration: Configuration
     ) {
         configureStatus(
             isCompleted: configuration.isCompleted
         )
-
+        
         configureTitle(
             configuration.title,
             isCompleted: configuration.isCompleted
         )
-
+        
         detailsLabel.text = configuration.details
         detailsLabel.isHidden = configuration.details.isEmpty
-
+        
         dateLabel.text = configuration.dateText
-
+        
         let secondaryColor = configuration.isCompleted
-            ? Palette.completedText
-            : Palette.secondaryText
-
+        ? Palette.completedText
+        : Palette.secondaryText
+        
         detailsLabel.textColor = secondaryColor
         dateLabel.textColor = secondaryColor
     }
-
+    
     private func configure() {
         backgroundColor = .black
         contentView.backgroundColor = .black
         selectionStyle = .none
-
+        
         configureStatusButton()
         configureLabels()
         configureStackView()
         configureHierarchy()
         configureConstraints()
     }
-
+    
     private func configureStatusButton() {
         statusButton.translatesAutoresizingMaskIntoConstraints =
-            false
-
+        false
+        
         statusButton.backgroundColor = .clear
         statusButton.layer.borderWidth = 1.5
         statusButton.layer.cornerRadius =
-            Layout.statusSize / 2
-
+        Layout.statusSize / 2
+        
         statusButton.addTarget(
             self,
             action: #selector(statusButtonTapped),
             for: .touchUpInside
         )
-
+        
         statusButton.accessibilityLabel =
-            "Изменить статус задачи"
+        "Изменить статус задачи"
     }
-
+    
+    @objc
+    private func statusButtonTapped() {
+        onStatusToggle?()
+    }
+    
     private func configureLabels() {
         titleLabel.font = .preferredFont(
             forTextStyle: .headline
@@ -160,40 +169,40 @@ final class TodoListCell: UITableViewCell {
         titleLabel.adjustsFontForContentSizeCategory = true
         titleLabel.numberOfLines = 1
         titleLabel.lineBreakMode = .byTruncatingTail
-
+        
         detailsLabel.font = .preferredFont(
             forTextStyle: .subheadline
         )
         detailsLabel.adjustsFontForContentSizeCategory = true
         detailsLabel.numberOfLines = 2
         detailsLabel.lineBreakMode = .byTruncatingTail
-
+        
         dateLabel.font = .preferredFont(
             forTextStyle: .caption1
         )
         dateLabel.adjustsFontForContentSizeCategory = true
-
+        
         separatorView.backgroundColor = Palette.separator
     }
-
+    
     private func configureStackView() {
         textStackView.translatesAutoresizingMaskIntoConstraints =
-            false
-
+        false
+        
         textStackView.axis = .vertical
         textStackView.alignment = .fill
         textStackView.spacing = Layout.textSpacing
     }
-
+    
     private func configureHierarchy() {
         contentView.addSubview(statusButton)
         contentView.addSubview(textStackView)
         contentView.addSubview(separatorView)
-
+        
         separatorView.translatesAutoresizingMaskIntoConstraints =
-            false
+        false
     }
-
+    
     private func configureConstraints() {
         NSLayoutConstraint.activate([
             statusButton.topAnchor.constraint(
@@ -209,7 +218,7 @@ final class TodoListCell: UITableViewCell {
             statusButton.heightAnchor.constraint(
                 equalToConstant: Layout.statusSize
             ),
-
+            
             textStackView.topAnchor.constraint(
                 equalTo: contentView.topAnchor,
                 constant: Layout.verticalInset
@@ -226,7 +235,7 @@ final class TodoListCell: UITableViewCell {
                 equalTo: separatorView.topAnchor,
                 constant: -Layout.verticalInset
             ),
-
+            
             separatorView.leadingAnchor.constraint(
                 equalTo: textStackView.leadingAnchor
             ),
@@ -242,97 +251,88 @@ final class TodoListCell: UITableViewCell {
             )
         ])
     }
-
+    
     private func configureStatus(
         isCompleted: Bool
     ) {
         statusButton.layer.borderColor = (
             isCompleted
-                ? Palette.accent
-                : Palette.pendingBorder
+            ? Palette.accent
+            : Palette.pendingBorder
         ).cgColor
-
-        let image: UIImage?
-
+        
         if isCompleted {
-            let configuration = UIImage.SymbolConfiguration(
-                pointSize: 13,
+            let configuration =
+            UIImage.SymbolConfiguration(
+                pointSize: 15,
                 weight: .semibold
             )
-
-            image = UIImage(
+            
+            let image = UIImage(
                 systemName: "checkmark",
                 withConfiguration: configuration
             )
-        } else {
-            image = nil
-        }
-
-        statusButton.setImage(
-            image,
-            for: .normal
-        )
-
-        statusButton.tintColor = Palette.accent
-        statusButton.accessibilityValue = isCompleted
-            ? "Выполнена"
-            : "Не выполнена"
-
-        statusButton.accessibilityTraits = .button
-
-        if isCompleted {
-            statusButton.accessibilityTraits.insert(
-                .selected
+            
+            statusButton.setImage(
+                image,
+                for: .normal
             )
+            statusButton.tintColor = Palette.accent
+        } else {
+            statusButton.setImage(
+                nil,
+                for: .normal
+            )
+            statusButton.tintColor = nil
         }
     }
-
+    
     private func configureTitle(
         _ title: String,
         isCompleted: Bool
     ) {
+        let titleColor = isCompleted
+        ? Palette.completedText
+        : UIColor.white
+        
+        var attributes: [
+            NSAttributedString.Key: Any
+        ] = [
+            .foregroundColor: titleColor
+        ]
+        
         if isCompleted {
-            titleLabel.text = nil
-
-            titleLabel.attributedText = NSAttributedString(
-                string: title,
-                attributes: [
-                    .font: titleLabel.font as Any,
-                    .foregroundColor:
-                        Palette.completedText,
-                    .strikethroughStyle:
-                        NSUnderlineStyle.single.rawValue
-                ]
-            )
-        } else {
-            titleLabel.attributedText = nil
-            titleLabel.text = title
-            titleLabel.textColor = Palette.primaryText
+            attributes[.strikethroughStyle] =
+            NSUnderlineStyle.single.rawValue
+            
+            attributes[.strikethroughColor] =
+            titleColor
         }
+        
+        titleLabel.attributedText =
+        NSAttributedString(
+            string: title,
+            attributes: attributes
+        )
     }
-
-    @objc
-    private func statusButtonTapped() {
-        onStatusToggle?()
-    }
-}
-
-private final class ExpandedHitAreaButton: UIButton {
-
-    override func point(
-        inside point: CGPoint,
-        with event: UIEvent?
-    ) -> Bool {
-        guard
-            isUserInteractionEnabled,
-            !isHidden,
-            alpha > 0.01
-        else {
-            return false
+    
+    private final class ExpandedHitAreaButton: UIButton {
+        
+        override func point(
+            inside point: CGPoint,
+            with event: UIEvent?
+        ) -> Bool {
+            guard
+                isUserInteractionEnabled,
+                !isHidden,
+                alpha > 0.01
+            else {
+                return false
+            }
+            
+            return bounds
+                .insetBy(dx: -8, dy: -8)
+                .contains(point)
         }
-
-        return bounds
-            .insetBy(dx: -8, dy: -8)
-            .contains(point)
     }
 }

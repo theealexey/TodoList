@@ -38,26 +38,71 @@ struct TodoListAssembly {
                     .delete(id: id)
             }
         )
-        
+
         let viewModel = TodoListViewModel(
             loadTodosUseCase: loadTodosUseCase,
-            toggleTodoStatusUseCase: toggleTodoStatusUseCase,
-            deleteTodoUseCase: deleteTodoUseCase
+            toggleTodoStatusUseCase:
+                toggleTodoStatusUseCase,
+            deleteTodoUseCase:
+                deleteTodoUseCase
         )
 
         let viewController = TodoListViewController(
             viewModel: viewModel
         )
 
-        configureCreateTodoFlow(
-            for: viewController
+        let editorAssembly = makeEditorAssembly()
+
+        configureEditorFlows(
+            for: viewController,
+            editorAssembly: editorAssembly
         )
 
         return viewController
     }
-    
-    private func configureCreateTodoFlow(
-        for viewController: TodoListViewController
+
+    private func makeEditorAssembly()
+        -> TodoEditorAssembly {
+        let createTodoUseCase = CreateTodoUseCase(
+            create: { item in
+                try await container.prepare()
+
+                try await container
+                    .todoRepository
+                    .create(item)
+            }
+        )
+
+        let updateTodoUseCase = UpdateTodoUseCase(
+            update: { item in
+                try await container.prepare()
+
+                try await container
+                    .todoRepository
+                    .update(item)
+            }
+        )
+
+        return TodoEditorAssembly(
+            create: { title, details in
+                try await createTodoUseCase.execute(
+                    title: title,
+                    details: details
+                )
+            },
+            update: { item, title, details in
+                try await updateTodoUseCase.execute(
+                    item: item,
+                    title: title,
+                    details: details
+                )
+            }
+        )
+    }
+
+    private func configureEditorFlows(
+        for viewController: TodoListViewController,
+        editorAssembly: TodoEditorAssembly
     ) {
         viewController.onAddTodo = {
             [weak viewController] in
@@ -66,42 +111,39 @@ struct TodoListAssembly {
                 return
             }
 
-            let createAssembly = CreateTodoAssembly(
-                container: container
-            )
-
-            let createViewController =
-                createAssembly.makeViewController()
-
-            let navigationController =
-                UINavigationController(
-                    rootViewController:
-                        createViewController
-                )
-
-            createViewController.onCancel = {
-                [weak navigationController] in
-
-                navigationController?.dismiss(
-                    animated: true
-                )
-            }
-
-            createViewController.onSaved = {
-                [weak navigationController, weak viewController]
-                _ in
-
-                navigationController?.dismiss(
-                    animated: true
-                ) {
+            let editorViewController =
+                editorAssembly.makeCreateViewController(
+                    createdAt: Date()
+                ) { [weak viewController] _ in
                     viewController?.reloadTodos()
                 }
+
+            viewController.navigationController?
+                .pushViewController(
+                    editorViewController,
+                    animated: true
+                )
+        }
+
+        viewController.onEditTodo = {
+            [weak viewController] item in
+
+            guard let viewController else {
+                return
             }
 
-            viewController.present(
-                navigationController,
-                animated: true
-            )
+            let editorViewController =
+                editorAssembly.makeEditViewController(
+                    item: item
+                ) { [weak viewController] _ in
+                    viewController?.reloadTodos()
+                }
+
+            viewController.navigationController?
+                .pushViewController(
+                    editorViewController,
+                    animated: true
+                )
         }
     }
 }

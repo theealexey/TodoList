@@ -124,9 +124,19 @@ final class TodoListViewController: UIViewController {
                 value: "Отмена",
                 comment: "Cancel button title"
             )
+        
+        static let editTitle =
+            NSLocalizedString(
+                "todo_list.context_menu.edit",
+                tableName: nil,
+                bundle: .main,
+                value: "Редактировать",
+                comment: "Edit todo context menu action"
+            )
 }
     
     var onAddTodo: (() -> Void)?
+    var onEditTodo: ((TodoItem) -> Void)?
 
     private let viewModel: TodoListViewModel
 
@@ -568,7 +578,16 @@ extension TodoListViewController: UITableViewDelegate {
             else {
                 return nil
             }
-
+            
+            let editAction = UIAction(
+                title: Localization.editTitle,
+                image: UIImage(
+                    systemName: "pencil"
+                )
+            ) { [weak self] _ in
+                self?.onEditTodo?(item)
+            }
+            
             let shareAction = UIAction(
                 title: Localization.shareTitle,
                 image: UIImage(
@@ -607,10 +626,27 @@ extension TodoListViewController: UITableViewDelegate {
 
             return UIMenu(
                 children: [
+                    editAction,
                     shareAction,
                     deleteAction
                 ]
             )
         }
+    }
+    
+    func tableView(
+        _ tableView: UITableView,
+        didSelectRowAt indexPath: IndexPath
+    ) {
+        tableView.deselectRow(
+            at: indexPath,
+            animated: true
+        )
+
+        guard items.indices.contains(indexPath.row) else {
+            return
+        }
+
+        onEditTodo?(items[indexPath.row])
     }
 }
