@@ -283,8 +283,11 @@ final class TodoListView: UIView, UISearchBarDelegate {
             for: .touchUpInside
         )
 
-        addButton.accessibilityLabel =
-            "Создать задачу"
+        addButton.accessibilityLabel = NSLocalizedString(
+            "todo_list.add_button.accessibility_label",
+            value: "Create task",
+            comment: "Accessibility label for the add todo button."
+        )
 
         addButton.accessibilityIdentifier =
             "todoList.addButton"

@@ -120,6 +120,24 @@
         }
       }
     },
+    "todo_list.add_button.accessibility_label" : {
+      "comment" : "Accessibility label for the add todo button.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Create task"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Создать задачу"
+          }
+        }
+      }
+    },
     "todo_list.context_menu.delete" : {
       "comment" : "Delete todo context menu action",
       "localizations" : {
