@@ -325,6 +325,24 @@
         }
       }
     },
+    "todo_list.status_button.accessibility_label" : {
+      "comment" : "Accessibility label for the button that toggles todo completion status",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Change task status"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Изменить статус задачи"
+          }
+        }
+      }
+    },
     "todo_list.status_update.failure" : {
       "comment" : "Todo status update failure message",
       "localizations" : {
