@@ -9,7 +9,7 @@ final class TodoListViewController: UIViewController {
             "todo_list.title",
             tableName: nil,
             bundle: .main,
-            value: "Задачи",
+            value: "Tasks",
             comment: "Todo list screen title"
         )
         
@@ -25,7 +25,7 @@ final class TodoListViewController: UIViewController {
             "todo_list.empty.message",
             tableName: nil,
             bundle: .main,
-            value: "Задач пока нет",
+            value: "No tasks yet",
             comment: "Todo list empty state message"
         )
         
@@ -33,7 +33,7 @@ final class TodoListViewController: UIViewController {
             "todo_list.failure.message",
             tableName: nil,
             bundle: .main,
-            value: "Не удалось загрузить задачи",
+            value: "Failed to load tasks",
             comment: "Todo list loading failure message"
         )
         
@@ -41,7 +41,7 @@ final class TodoListViewController: UIViewController {
             "todo_list.retry.title",
             tableName: nil,
             bundle: .main,
-            value: "Повторить",
+            value: "Retry",
             comment: "Todo list retry button title"
         )
     
@@ -49,7 +49,7 @@ final class TodoListViewController: UIViewController {
         "todo_list.search.no_results",
         tableName: nil,
         bundle: .main,
-        value: "Ничего не найдено",
+        value: "Nothing found",
         comment: "Todo list search empty result message"
     )
         
@@ -58,7 +58,7 @@ final class TodoListViewController: UIViewController {
                 "todo_list.status_update.failure",
                 tableName: nil,
                 bundle: .main,
-                value: "Не удалось изменить статус задачи",
+                value: "Failed to update task status",
                 comment: "Todo status update failure message"
             )
 
@@ -67,7 +67,7 @@ final class TodoListViewController: UIViewController {
                 "todo_list.delete.failure",
                 tableName: nil,
                 bundle: .main,
-                value: "Не удалось удалить задачу",
+                value: "Failed to delete the task",
                 comment: "Todo deletion failure message"
             )
 
@@ -85,7 +85,7 @@ final class TodoListViewController: UIViewController {
                 "todo_list.context_menu.share",
                 tableName: nil,
                 bundle: .main,
-                value: "Поделиться",
+                value: "Share",
                 comment: "Share todo context menu action"
             )
 
@@ -94,7 +94,7 @@ final class TodoListViewController: UIViewController {
                 "todo_list.context_menu.delete",
                 tableName: nil,
                 bundle: .main,
-                value: "Удалить",
+                value: "Delete",
                 comment: "Delete todo context menu action"
             )
 
@@ -103,7 +103,7 @@ final class TodoListViewController: UIViewController {
                 "todo_list.delete.confirmation.title",
                 tableName: nil,
                 bundle: .main,
-                value: "Удалить задачу?",
+                value: "Delete task?",
                 comment: "Todo deletion confirmation title"
             )
 
@@ -112,7 +112,7 @@ final class TodoListViewController: UIViewController {
                 "todo_list.delete.confirmation.message",
                 tableName: nil,
                 bundle: .main,
-                value: "Это действие нельзя отменить.",
+                value: "This action can’t be undone.",
                 comment: "Todo deletion confirmation message"
             )
 
@@ -121,7 +121,7 @@ final class TodoListViewController: UIViewController {
                 "common.cancel",
                 tableName: nil,
                 bundle: .main,
-                value: "Отмена",
+                value: "Cancel",
                 comment: "Cancel button title"
             )
         
@@ -130,7 +130,7 @@ final class TodoListViewController: UIViewController {
                 "todo_list.context_menu.edit",
                 tableName: nil,
                 bundle: .main,
-                value: "Редактировать",
+                value: "Edit",
                 comment: "Edit todo context menu action"
             )
 }
