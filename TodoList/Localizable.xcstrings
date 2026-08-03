@@ -1,246 +1,190 @@
 {
-  "sourceLanguage" : "en",
-  "strings" : {
-    "common.cancel" : {
-      "comment" : "Cancel button title",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Отмена"
+  "sourceLanguage": "en",
+  "strings": {
+    "common.cancel": {
+      "comment": "Cancel button title",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Cancel" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Отмена" } }
+      }
+    },
+    "common.ok": {
+      "comment": "Alert confirmation button",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "OK" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "OK" } }
+      }
+    },
+    "todo_editor.back": {
+      "comment": "Todo editor back button title",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Back" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Назад" } }
+      }
+    },
+    "todo_editor.details.placeholder": {
+      "comment": "Todo editor details placeholder",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Description" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Описание" } }
+      }
+    },
+    "todo_editor.save.failure": {
+      "comment": "Todo editor save failure message",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Failed to save the task" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Не удалось сохранить задачу" } }
+      }
+    },
+    "todo_editor.title.placeholder": {
+      "comment": "Todo editor title placeholder",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Title" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Название" } }
+      }
+    },
+    "todo_editor.validation.empty_title": {
+      "comment": "Todo editor empty title validation message",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Enter a task title" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Введите название задачи" } }
+      }
+    },
+    "todo_list.context_menu.delete": {
+      "comment": "Delete todo context menu action",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Delete" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Удалить" } }
+      }
+    },
+    "todo_list.context_menu.edit": {
+      "comment": "Edit todo context menu action",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Edit" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Редактировать" } }
+      }
+    },
+    "todo_list.context_menu.share": {
+      "comment": "Share todo context menu action",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Share" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Поделиться" } }
+      }
+    },
+    "todo_list.delete.confirmation.message": {
+      "comment": "Todo deletion confirmation message",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "This action can’t be undone." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Это действие нельзя отменить." } }
+      }
+    },
+    "todo_list.delete.confirmation.title": {
+      "comment": "Todo deletion confirmation title",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Delete task?" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Удалить задачу?" } }
+      }
+    },
+    "todo_list.delete.failure": {
+      "comment": "Todo deletion failure message",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Failed to delete the task" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Не удалось удалить задачу" } }
+      }
+    },
+    "todo_list.empty.message": {
+      "comment": "Todo list empty state message",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "No tasks yet" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Задач пока нет" } }
+      }
+    },
+    "todo_list.failure.message": {
+      "comment": "Todo list loading failure message",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Failed to load tasks" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Не удалось загрузить задачи" } }
+      }
+    },
+    "todo_list.retry.title": {
+      "comment": "Todo list retry button title",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Retry" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Повторить" } }
+      }
+    },
+    "todo_list.search.no_results": {
+      "comment": "Todo list search empty result message",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Nothing found" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Ничего не найдено" } }
+      }
+    },
+    "todo_list.search.placeholder": {
+      "comment": "Todo list search placeholder",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Search" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Поиск" } }
+      }
+    },
+    "todo_list.status_update.failure": {
+      "comment": "Todo status update failure message",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Failed to update task status" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Не удалось изменить статус задачи" } }
+      }
+    },
+    "todo_list.task_count": {
+      "comment": "Number of visible todo items",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": { "stringUnit": { "state": "translated", "value": "%lld task" } },
+              "other": { "stringUnit": { "state": "translated", "value": "%lld tasks" } }
+            }
+          }
+        },
+        "ru": {
+          "variations": {
+            "plural": {
+              "one": { "stringUnit": { "state": "translated", "value": "%lld задача" } },
+              "few": { "stringUnit": { "state": "translated", "value": "%lld задачи" } },
+              "many": { "stringUnit": { "state": "translated", "value": "%lld задач" } },
+              "other": { "stringUnit": { "state": "translated", "value": "%lld задачи" } }
+            }
           }
         }
       }
     },
-    "common.ok" : {
-      "comment" : "Alert confirmation button",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "OK"
-          }
-        }
-      }
-    },
-    "todo_editor.back" : {
-      "comment" : "Todo editor back button title",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Назад"
-          }
-        }
-      }
-    },
-    "todo_editor.details.placeholder" : {
-      "comment" : "Todo editor details placeholder",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Описание"
-          }
-        }
-      }
-    },
-    "todo_editor.save.failure" : {
-      "comment" : "Todo editor save failure message",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Не удалось сохранить задачу"
-          }
-        }
-      }
-    },
-    "todo_editor.title.placeholder" : {
-      "comment" : "Todo editor title placeholder",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Название"
-          }
-        }
-      }
-    },
-    "todo_editor.validation.empty_title" : {
-      "comment" : "Todo editor empty title validation message",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Введите название задачи"
-          }
-        }
-      }
-    },
-    "todo_list.context_menu.delete" : {
-      "comment" : "Delete todo context menu action",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Удалить"
-          }
-        }
-      }
-    },
-    "todo_list.context_menu.edit" : {
-      "comment" : "Edit todo context menu action",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Редактировать"
-          }
-        }
-      }
-    },
-    "todo_list.context_menu.share" : {
-      "comment" : "Share todo context menu action",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Поделиться"
-          }
-        }
-      }
-    },
-    "todo_list.delete.confirmation.message" : {
-      "comment" : "Todo deletion confirmation message",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Это действие нельзя отменить."
-          }
-        }
-      }
-    },
-    "todo_list.delete.confirmation.title" : {
-      "comment" : "Todo deletion confirmation title",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Удалить задачу?"
-          }
-        }
-      }
-    },
-    "todo_list.delete.failure" : {
-      "comment" : "Todo deletion failure message",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Не удалось удалить задачу"
-          }
-        }
-      }
-    },
-    "todo_list.empty.message" : {
-      "comment" : "Todo list empty state message",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Задач пока нет"
-          }
-        }
-      }
-    },
-    "todo_list.failure.message" : {
-      "comment" : "Todo list loading failure message",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Не удалось загрузить задачи"
-          }
-        }
-      }
-    },
-    "todo_list.retry.title" : {
-      "comment" : "Todo list retry button title",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Повторить"
-          }
-        }
-      }
-    },
-    "todo_list.search.no_results" : {
-      "comment" : "Todo list search empty result message",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Ничего не найдено"
-          }
-        }
-      }
-    },
-    "todo_list.search.placeholder" : {
-      "comment" : "Todo list search placeholder",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Search"
-          }
-        }
-      }
-    },
-    "todo_list.status_update.failure" : {
-      "comment" : "Todo status update failure message",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Не удалось изменить статус задачи"
-          }
-        }
-      }
-    },
-    "todo_list.title" : {
-      "comment" : "Todo list screen title",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Задачи"
-          }
-        }
+    "todo_list.title": {
+      "comment": "Todo list screen title",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Tasks" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Задачи" } }
       }
     }
   },
-  "version" : "1.1"
+  "version": "1.1"
 }
