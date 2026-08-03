@@ -10,7 +10,7 @@ final class TodoEditorViewController: UIViewController {
                 "todo_editor.back",
                 tableName: nil,
                 bundle: .main,
-                value: "Назад",
+                value: "Back",
                 comment: "Todo editor back button title"
             )
 
@@ -19,7 +19,7 @@ final class TodoEditorViewController: UIViewController {
                 "todo_editor.title.placeholder",
                 tableName: nil,
                 bundle: .main,
-                value: "Название",
+                value: "Title",
                 comment: "Todo editor title placeholder"
             )
 
@@ -28,7 +28,7 @@ final class TodoEditorViewController: UIViewController {
                 "todo_editor.details.placeholder",
                 tableName: nil,
                 bundle: .main,
-                value: "Описание",
+                value: "Description",
                 comment: "Todo editor details placeholder"
             )
 
@@ -37,7 +37,7 @@ final class TodoEditorViewController: UIViewController {
                 "todo_editor.validation.empty_title",
                 tableName: nil,
                 bundle: .main,
-                value: "Введите название задачи",
+                value: "Enter a task title",
                 comment: "Todo editor empty title validation message"
             )
 
@@ -46,7 +46,7 @@ final class TodoEditorViewController: UIViewController {
                 "todo_editor.save.failure",
                 tableName: nil,
                 bundle: .main,
-                value: "Не удалось сохранить задачу",
+                value: "Failed to save the task",
                 comment: "Todo editor save failure message"
             )
 
