@@ -6,10 +6,6 @@
 	objectVersion = 77;
 	objects = {
 
-/* Begin PBXBuildFile section */
-		8A87FE8B3020D057008F1B02 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 8A87FE8A3020D057008F1B02 /* Localizable.xcstrings */; };
-/* End PBXBuildFile section */
-
 /* Begin PBXContainerItemProxy section */
 		8AC84C57301A7B8D007E09FA /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -21,7 +17,6 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		8A87FE8A3020D057008F1B02 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		8AC84C40301A7B8B007E09FA /* TodoList.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TodoList.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		8AC84C56301A7B8D007E09FA /* TodoListTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TodoListTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -73,7 +68,6 @@
 		8AC84C37301A7B8B007E09FA = {
 			isa = PBXGroup;
 			children = (
-				8A87FE8A3020D057008F1B02 /* Localizable.xcstrings */,
 				8AC84C42301A7B8B007E09FA /* TodoList */,
 				8AC84C59301A7B8D007E09FA /* TodoListTests */,
 				8AC84C41301A7B8B007E09FA /* Products */,
@@ -182,7 +176,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				8A87FE8B3020D057008F1B02 /* Localizable.xcstrings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
