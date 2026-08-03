@@ -242,17 +242,15 @@ final class TodoEditorViewController: UIViewController {
 
         view.endEditing(true)
 
-        saveTask = Task { [weak self] in
-            guard let self else {
-                return
-            }
+        let viewModel = viewModel
 
+        saveTask = Task { [weak self] in
             await viewModel.save(
                 title: title,
                 details: details
             )
 
-            saveTask = nil
+            self?.saveTask = nil
         }
     }
 

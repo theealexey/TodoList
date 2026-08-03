@@ -1,6 +1,6 @@
 import UIKit
 
-final class TodoListView: UIView, UISearchBarDelegate {
+final class TodoListView: UIView {
 
     struct Texts {
         let title: String
@@ -175,6 +175,9 @@ final class TodoListView: UIView, UISearchBarDelegate {
             ofSize: 34,
             weight: .bold
         )
+        titleLabel.font = UIFontMetrics(
+            forTextStyle: .largeTitle
+        ).scaledFont(for: titleLabel.font)
         titleLabel.adjustsFontForContentSizeCategory = true
     }
 
@@ -530,5 +533,22 @@ extension TodoListView: UIGestureRecognizerDelegate {
         }
 
         return true
+    }
+}
+
+extension TodoListView: UISearchBarDelegate {
+
+    func searchBar(
+        _ searchBar: UISearchBar,
+        textDidChange searchText: String
+    ) {
+        onSearchTextChange?(searchText)
+    }
+
+    func searchBarSearchButtonClicked(
+        _ searchBar: UISearchBar
+    ) {
+        onSearchTextChange?(searchBar.text ?? "")
+        searchBar.resignFirstResponder()
     }
 }

@@ -7,6 +7,7 @@ final class TodoListCell: UITableViewCell {
         let details: String
         let dateText: String
         let isCompleted: Bool
+        let isMutationEnabled: Bool
     }
 
     static let reuseIdentifier = "TodoListCell"
@@ -120,13 +121,16 @@ final class TodoListCell: UITableViewCell {
             nil,
             for: .normal
         )
+        statusButton.isEnabled = true
+        statusButton.alpha = 1
     }
 
     func configure(
         with configuration: Configuration
     ) {
         configureStatus(
-            isCompleted: configuration.isCompleted
+            isCompleted: configuration.isCompleted,
+            isMutationEnabled: configuration.isMutationEnabled
         )
 
         configureTitle(
@@ -276,8 +280,12 @@ final class TodoListCell: UITableViewCell {
     }
 
     private func configureStatus(
-        isCompleted: Bool
+        isCompleted: Bool,
+        isMutationEnabled: Bool
     ) {
+        statusButton.isEnabled = isMutationEnabled
+        statusButton.alpha = isMutationEnabled ? 1 : 0.5
+
         statusButton.layer.borderColor = (
             isCompleted
                 ? Palette.accent

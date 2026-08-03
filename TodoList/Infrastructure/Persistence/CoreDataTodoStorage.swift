@@ -1,4 +1,5 @@
 import CoreData
+import Foundation
 
 struct TodoImportRecord: Equatable, Sendable {
     let remoteID: Int
@@ -13,6 +14,9 @@ enum CoreDataTodoStorageError: Error, Equatable, Sendable {
 }
 
 final class CoreDataTodoStorage {
+
+    private static let entityName = "StoredTodo"
+    private static let localRemoteID: Int64 = 0
 
     private let container: NSPersistentContainer
 
@@ -31,11 +35,11 @@ final class CoreDataTodoStorage {
                     )
 
                     storedTodo.id = item.id
+                    storedTodo.remoteID = Self.localRemoteID
                     storedTodo.title = item.title
                     storedTodo.details = item.details
                     storedTodo.createdAt = item.createdAt
-                    storedTodo.isCompleted =
-                        item.status == .completed
+                    storedTodo.isCompleted = item.status == .completed
 
                     try context.save()
                     continuation.resume()
@@ -45,7 +49,7 @@ final class CoreDataTodoStorage {
             }
         }
     }
-    
+
     func update(_ item: TodoItem) async throws {
         try await withCheckedThrowingContinuation {
             (continuation: CheckedContinuation<Void, Error>) in
@@ -53,18 +57,15 @@ final class CoreDataTodoStorage {
             container.performBackgroundTask { context in
                 do {
                     let request = NSFetchRequest<StoredTodo>(
-                        entityName: "StoredTodo"
+                        entityName: Self.entityName
                     )
-
                     request.predicate = NSPredicate(
                         format: "id == %@",
                         item.id as NSUUID
                     )
                     request.fetchLimit = 1
 
-                    guard let storedTodo =
-                        try context.fetch(request).first
-                    else {
+                    guard let storedTodo = try context.fetch(request).first else {
                         throw CoreDataTodoStorageError.todoNotFound(
                             id: item.id
                         )
@@ -73,20 +74,17 @@ final class CoreDataTodoStorage {
                     storedTodo.title = item.title
                     storedTodo.details = item.details
                     storedTodo.createdAt = item.createdAt
-                    storedTodo.isCompleted =
-                        item.status == .completed
+                    storedTodo.isCompleted = item.status == .completed
 
                     try context.save()
                     continuation.resume()
                 } catch {
-                    continuation.resume(
-                        throwing: error
-                    )
+                    continuation.resume(throwing: error)
                 }
             }
         }
     }
-    
+
     func delete(id: UUID) async throws {
         try await withCheckedThrowingContinuation {
             (continuation: CheckedContinuation<Void, Error>) in
@@ -94,36 +92,28 @@ final class CoreDataTodoStorage {
             container.performBackgroundTask { context in
                 do {
                     let request = NSFetchRequest<StoredTodo>(
-                        entityName: "StoredTodo"
+                        entityName: Self.entityName
                     )
-
                     request.predicate = NSPredicate(
                         format: "id == %@",
                         id as NSUUID
                     )
                     request.fetchLimit = 1
 
-                    guard let storedTodo =
-                        try context.fetch(request).first
-                    else {
-                        throw CoreDataTodoStorageError.todoNotFound(
-                            id: id
-                        )
+                    guard let storedTodo = try context.fetch(request).first else {
+                        throw CoreDataTodoStorageError.todoNotFound(id: id)
                     }
 
                     context.delete(storedTodo)
                     try context.save()
-
                     continuation.resume()
                 } catch {
-                    continuation.resume(
-                        throwing: error
-                    )
+                    continuation.resume(throwing: error)
                 }
             }
         }
     }
-    
+
     func createImportedTodo(
         remoteID: Int,
         title: String,
@@ -141,7 +131,7 @@ final class CoreDataTodoStorage {
             importedAt: importedAt
         )
     }
-    
+
     func importTodos(
         _ records: [TodoImportRecord],
         importedAt: Date
@@ -160,29 +150,23 @@ final class CoreDataTodoStorage {
                     )
 
                     let request = NSFetchRequest<StoredTodo>(
-                        entityName: "StoredTodo"
+                        entityName: Self.entityName
                     )
-
                     request.predicate = NSPredicate(
-                        format: "remoteID IN %@",
-                        candidateRemoteIDs.map {
-                            NSNumber(value: $0)
-                        }
+                        format: "remoteID > %@ AND remoteID IN %@",
+                        NSNumber(value: Self.localRemoteID),
+                        candidateRemoteIDs.map(NSNumber.init(value:))
                     )
 
                     let existingRemoteIDs = Set(
                         try context.fetch(request).map(\.remoteID)
                     )
-
                     var processedRemoteIDs = existingRemoteIDs
 
                     for record in records {
                         let remoteID = Int64(record.remoteID)
 
-                        guard processedRemoteIDs
-                            .insert(remoteID)
-                            .inserted
-                        else {
+                        guard processedRemoteIDs.insert(remoteID).inserted else {
                             continue
                         }
 
@@ -195,8 +179,7 @@ final class CoreDataTodoStorage {
                         storedTodo.title = record.title
                         storedTodo.details = ""
                         storedTodo.createdAt = importedAt
-                        storedTodo.isCompleted =
-                            record.isCompleted
+                        storedTodo.isCompleted = record.isCompleted
                     }
 
                     if context.hasChanges {
@@ -210,23 +193,29 @@ final class CoreDataTodoStorage {
             }
         }
     }
-    
-    
+
     func fetchAll() async throws -> [TodoItem] {
         try await withCheckedThrowingContinuation {
-            (continuation: CheckedContinuation<[TodoItem], Error>) in
+            (
+                continuation: CheckedContinuation<[TodoItem], Error>
+            ) in
 
             container.performBackgroundTask { context in
                 do {
                     let request = NSFetchRequest<StoredTodo>(
-                        entityName: "StoredTodo"
+                        entityName: Self.entityName
                     )
+                    request.sortDescriptors = [
+                        NSSortDescriptor(
+                            key: #keyPath(StoredTodo.createdAt),
+                            ascending: false
+                        )
+                    ]
 
-                    let storedTodos = try context.fetch(request)
-
-                    let items = try storedTodos.map { storedTodo in
-                        try Self.makeTodoItem(from: storedTodo)
+                    let items = try context.fetch(request).map {
+                        try Self.makeTodoItem(from: $0)
                     }
+                    .sorted(by: Self.isOrderedBefore)
 
                     continuation.resume(returning: items)
                 } catch {
@@ -234,6 +223,17 @@ final class CoreDataTodoStorage {
                 }
             }
         }
+    }
+
+    private static func isOrderedBefore(
+        _ lhs: TodoItem,
+        _ rhs: TodoItem
+    ) -> Bool {
+        if lhs.createdAt != rhs.createdAt {
+            return lhs.createdAt > rhs.createdAt
+        }
+
+        return lhs.id.uuidString < rhs.id.uuidString
     }
 
     private static func makeTodoItem(
@@ -256,16 +256,15 @@ final class CoreDataTodoStorage {
             status: storedTodo.isCompleted ? .completed : .pending
         )
     }
-    
+
     private static func makeStoredTodo(
         in context: NSManagedObjectContext
     ) throws -> StoredTodo {
         guard let entity = NSEntityDescription.entity(
-            forEntityName: "StoredTodo",
+            forEntityName: Self.entityName,
             in: context
         ) else {
-            throw CoreDataTodoStorageError
-                .storedTodoEntityMissing
+            throw CoreDataTodoStorageError.storedTodoEntityMissing
         }
 
         return StoredTodo(
@@ -273,5 +272,4 @@ final class CoreDataTodoStorage {
             insertInto: context
         )
     }
-    
 }

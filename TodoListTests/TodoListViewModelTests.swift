@@ -2,6 +2,83 @@ import Foundation
 import Testing
 @testable import TodoList
 
+private actor SuspendedMutation {
+
+    private struct StartWaiter {
+        let expectedCount: Int
+        let continuation: CheckedContinuation<Void, Never>
+    }
+
+    private let suspendedIDs: Set<UUID>
+    private var startedIDs: [UUID] = []
+    private var startWaiters: [StartWaiter] = []
+    private var releaseContinuations: [UUID: CheckedContinuation<Void, Never>] = [:]
+
+    init(suspendedIDs: Set<UUID>) {
+        self.suspendedIDs = suspendedIDs
+    }
+
+    func execute(id: UUID) async {
+        startedIDs.append(id)
+        resumeReadyStartWaiters()
+
+        guard suspendedIDs.contains(id) else {
+            return
+        }
+
+        guard releaseContinuations[id] == nil else {
+            return
+        }
+
+        await withCheckedContinuation { continuation in
+            releaseContinuations[id] = continuation
+        }
+    }
+
+    func waitForStartCount(_ expectedCount: Int) async {
+        guard startedIDs.count < expectedCount else {
+            return
+        }
+
+        await withCheckedContinuation { continuation in
+            startWaiters.append(
+                StartWaiter(
+                    expectedCount: expectedCount,
+                    continuation: continuation
+                )
+            )
+        }
+    }
+
+    func invocationCount(for id: UUID) -> Int {
+        startedIDs.filter { $0 == id }.count
+    }
+
+    func startedItemIDs() -> Set<UUID> {
+        Set(startedIDs)
+    }
+
+    func release(id: UUID) {
+        releaseContinuations.removeValue(
+            forKey: id
+        )?.resume()
+    }
+
+    private func resumeReadyStartWaiters() {
+        let readyWaiters = startWaiters.filter {
+            startedIDs.count >= $0.expectedCount
+        }
+
+        startWaiters.removeAll {
+            startedIDs.count >= $0.expectedCount
+        }
+
+        readyWaiters.forEach {
+            $0.continuation.resume()
+        }
+    }
+}
+
 @Suite
 @MainActor
 struct TodoListViewModelTests {
@@ -524,5 +601,233 @@ struct TodoListViewModelTests {
             viewModel.state == .content([item])
         )
         #expect(receivedError == .deleteFailed)
+    }
+
+    @Test
+    func repeatedToggleReportsOperationInProgressWithoutSecondUpdate() async {
+        let item = makeItem(title: "Single toggle")
+        let mutation = SuspendedMutation(
+            suspendedIDs: [item.id]
+        )
+        let viewModel = makeViewModel(
+            items: [item],
+            update: { item in
+                await mutation.execute(id: item.id)
+            }
+        )
+        var receivedErrors: [TodoListViewModel.ActionError] = []
+
+        viewModel.onActionError = { error in
+            receivedErrors.append(error)
+        }
+
+        await viewModel.load()
+
+        let firstToggle = Task {
+            await viewModel.toggleStatus(for: item)
+        }
+
+        await mutation.waitForStartCount(1)
+        await viewModel.toggleStatus(for: item)
+
+        #expect(await mutation.invocationCount(for: item.id) == 1)
+        #expect(receivedErrors == [.operationInProgress])
+
+        await mutation.release(id: item.id)
+        await firstToggle.value
+    }
+
+    @Test
+    func deleteDuringPendingToggleReportsOperationInProgressWithoutDelete() async {
+        let item = makeItem(title: "Toggle before delete")
+        let mutation = SuspendedMutation(
+            suspendedIDs: [item.id]
+        )
+        var deleteCallCount = 0
+        let viewModel = makeViewModel(
+            items: [item],
+            update: { item in
+                await mutation.execute(id: item.id)
+            },
+            delete: { _ in
+                deleteCallCount += 1
+            }
+        )
+        var receivedErrors: [TodoListViewModel.ActionError] = []
+
+        viewModel.onActionError = { error in
+            receivedErrors.append(error)
+        }
+
+        await viewModel.load()
+
+        let toggle = Task {
+            await viewModel.toggleStatus(for: item)
+        }
+
+        await mutation.waitForStartCount(1)
+        await viewModel.delete(item)
+
+        #expect(deleteCallCount == 0)
+        #expect(receivedErrors == [.operationInProgress])
+
+        await mutation.release(id: item.id)
+        await toggle.value
+    }
+
+    @Test
+    func toggleDuringPendingDeleteReportsOperationInProgressWithoutUpdate() async {
+        let item = makeItem(title: "Delete before toggle")
+        let mutation = SuspendedMutation(
+            suspendedIDs: [item.id]
+        )
+        var updateCallCount = 0
+        let viewModel = makeViewModel(
+            items: [item],
+            update: { _ in
+                updateCallCount += 1
+            },
+            delete: { id in
+                await mutation.execute(id: id)
+            }
+        )
+        var receivedErrors: [TodoListViewModel.ActionError] = []
+
+        viewModel.onActionError = { error in
+            receivedErrors.append(error)
+        }
+
+        await viewModel.load()
+
+        let delete = Task {
+            await viewModel.delete(item)
+        }
+
+        await mutation.waitForStartCount(1)
+        await viewModel.toggleStatus(for: item)
+
+        #expect(updateCallCount == 0)
+        #expect(receivedErrors == [.operationInProgress])
+
+        await mutation.release(id: item.id)
+        await delete.value
+        #expect(viewModel.state == .empty)
+    }
+
+    @Test
+    func mutationsForDifferentItemsRunIndependently() async {
+        let firstItem = makeItem(title: "First task")
+        let secondItem = makeItem(title: "Second task")
+        let mutation = SuspendedMutation(
+            suspendedIDs: [firstItem.id]
+        )
+        let viewModel = makeViewModel(
+            items: [firstItem, secondItem],
+            update: { item in
+                await mutation.execute(id: item.id)
+            }
+        )
+
+        await viewModel.load()
+
+        let firstToggle = Task {
+            await viewModel.toggleStatus(for: firstItem)
+        }
+
+        await mutation.waitForStartCount(1)
+        await viewModel.toggleStatus(for: secondItem)
+
+        #expect(
+            await mutation.startedItemIDs()
+                == [firstItem.id, secondItem.id]
+        )
+
+        await mutation.release(id: firstItem.id)
+        await firstToggle.value
+    }
+
+    @Test
+    func failedMutationClearsProcessingStateForRetry() async {
+        enum TestError: Error {
+            case updateFailed
+        }
+
+        let item = makeItem(title: "Retry mutation")
+        var updateAttemptCount = 0
+        let viewModel = makeViewModel(
+            items: [item],
+            update: { _ in
+                updateAttemptCount += 1
+
+                if updateAttemptCount == 1 {
+                    throw TestError.updateFailed
+                }
+            }
+        )
+
+        await viewModel.load()
+        await viewModel.toggleStatus(for: item)
+        await viewModel.toggleStatus(for: item)
+
+        #expect(updateAttemptCount == 2)
+        #expect(
+            viewModel.state == .content([
+                TodoItem(
+                    id: item.id,
+                    title: item.title,
+                    details: item.details,
+                    createdAt: item.createdAt,
+                    status: .completed
+                )
+            ])
+        )
+    }
+
+    @Test
+    func deleteAfterToggleCompletionRemovesUpdatedItem() async {
+        let item = makeItem(title: "Delete after toggle")
+        let mutation = SuspendedMutation(
+            suspendedIDs: [item.id]
+        )
+        let viewModel = makeViewModel(
+            items: [item],
+            update: { item in
+                await mutation.execute(id: item.id)
+            }
+        )
+
+        await viewModel.load()
+
+        let toggle = Task {
+            await viewModel.toggleStatus(for: item)
+        }
+
+        await mutation.waitForStartCount(1)
+        await mutation.release(id: item.id)
+        await toggle.value
+
+        let updatedItem = TodoItem(
+            id: item.id,
+            title: item.title,
+            details: item.details,
+            createdAt: item.createdAt,
+            status: .completed
+        )
+
+        await viewModel.delete(updatedItem)
+
+        #expect(viewModel.state == .empty)
+    }
+
+    private func makeItem(title: String) -> TodoItem {
+        TodoItem(
+            id: UUID(),
+            title: title,
+            details: "",
+            createdAt: Date(
+                timeIntervalSince1970: 1_700_000_000
+            ),
+            status: .pending
+        )
     }
 }

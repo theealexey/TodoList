@@ -125,10 +125,15 @@ final class TodoEditorView: UIView {
         titleTextView.backgroundColor = .clear
         titleTextView.textColor = .white
         titleTextView.tintColor = .systemYellow
-        titleTextView.font = .systemFont(
-            ofSize: 34,
-            weight: .bold
+        titleTextView.font = UIFontMetrics(
+            forTextStyle: .largeTitle
+        ).scaledFont(
+            for: .systemFont(
+                ofSize: 34,
+                weight: .bold
+            )
         )
+        titleTextView.adjustsFontForContentSizeCategory = true
         titleTextView.isScrollEnabled = false
         titleTextView.textContainerInset = .zero
         titleTextView.textContainer.lineFragmentPadding = 0
@@ -138,6 +143,7 @@ final class TodoEditorView: UIView {
         titlePlaceholderLabel.translatesAutoresizingMaskIntoConstraints =
             false
         titlePlaceholderLabel.font = titleTextView.font
+        titlePlaceholderLabel.adjustsFontForContentSizeCategory = true
         titlePlaceholderLabel.textColor =
             UIColor.white.withAlphaComponent(0.75)
         titlePlaceholderLabel.numberOfLines = 0
@@ -146,10 +152,15 @@ final class TodoEditorView: UIView {
 
     private func configureDateLabel() {
         dateLabel.translatesAutoresizingMaskIntoConstraints = false
-        dateLabel.font = .systemFont(
-            ofSize: 15,
-            weight: .regular
+        dateLabel.font = UIFontMetrics(
+            forTextStyle: .subheadline
+        ).scaledFont(
+            for: .systemFont(
+                ofSize: 15,
+                weight: .regular
+            )
         )
+        dateLabel.adjustsFontForContentSizeCategory = true
         dateLabel.textColor =
             UIColor.white.withAlphaComponent(0.65)
         dateLabel.numberOfLines = 1
@@ -160,10 +171,15 @@ final class TodoEditorView: UIView {
         detailsTextView.backgroundColor = .clear
         detailsTextView.textColor = .white
         detailsTextView.tintColor = .systemYellow
-        detailsTextView.font = .systemFont(
-            ofSize: 17,
-            weight: .regular
+        detailsTextView.font = UIFontMetrics(
+            forTextStyle: .body
+        ).scaledFont(
+            for: .systemFont(
+                ofSize: 17,
+                weight: .regular
+            )
         )
+        detailsTextView.adjustsFontForContentSizeCategory = true
         detailsTextView.isScrollEnabled = false
         detailsTextView.textContainerInset = .zero
         detailsTextView.textContainer.lineFragmentPadding = 0
@@ -172,6 +188,7 @@ final class TodoEditorView: UIView {
         detailsPlaceholderLabel.translatesAutoresizingMaskIntoConstraints =
             false
         detailsPlaceholderLabel.font = detailsTextView.font
+        detailsPlaceholderLabel.adjustsFontForContentSizeCategory = true
         detailsPlaceholderLabel.textColor =
             UIColor.white.withAlphaComponent(0.60)
         detailsPlaceholderLabel.numberOfLines = 0
@@ -180,10 +197,15 @@ final class TodoEditorView: UIView {
 
     private func configureValidationLabel() {
         validationLabel.translatesAutoresizingMaskIntoConstraints = false
-        validationLabel.font = .systemFont(
-            ofSize: 14,
-            weight: .regular
+        validationLabel.font = UIFontMetrics(
+            forTextStyle: .footnote
+        ).scaledFont(
+            for: .systemFont(
+                ofSize: 14,
+                weight: .regular
+            )
         )
+        validationLabel.adjustsFontForContentSizeCategory = true
         validationLabel.textColor = .systemRed
         validationLabel.numberOfLines = 0
         validationLabel.isHidden = true
@@ -223,7 +245,7 @@ final class TodoEditorView: UIView {
                 equalTo: trailingAnchor
             ),
             scrollView.bottomAnchor.constraint(
-                equalTo: bottomAnchor
+                equalTo: keyboardLayoutGuide.topAnchor
             ),
 
             contentView.topAnchor.constraint(

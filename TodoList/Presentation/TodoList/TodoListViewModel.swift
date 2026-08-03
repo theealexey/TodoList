@@ -15,6 +15,7 @@ final class TodoListViewModel {
     enum ActionError: Equatable {
         case statusUpdateFailed
         case deleteFailed
+        case operationInProgress
     }
 
     private let loadTodosUseCase: LoadTodosUseCase
@@ -66,6 +67,7 @@ final class TodoListViewModel {
 
     func toggleStatus(for item: TodoItem) async {
         guard processingItemIDs.insert(item.id).inserted else {
+            onActionError?(.operationInProgress)
             return
         }
 
@@ -94,6 +96,7 @@ final class TodoListViewModel {
 
     func delete(_ item: TodoItem) async {
         guard processingItemIDs.insert(item.id).inserted else {
+            onActionError?(.operationInProgress)
             return
         }
 

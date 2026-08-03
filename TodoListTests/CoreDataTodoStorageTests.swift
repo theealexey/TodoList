@@ -13,21 +13,16 @@ private struct StoredTodoSnapshot: Equatable, Sendable {
 }
 
 struct CoreDataTodoStorageTests {
-    
+
     @Test
     func createSavesTodoInPersistentStore() async throws {
-        let stack = CoreDataStack(inMemory: true)
-        try await stack.load()
-        
-        let storage = CoreDataTodoStorage(
-            container: stack.container
-        )
-        
+        let (stack, storage) = try await makeStorage()
+
         let id = UUID()
         let createdAt = Date(
             timeIntervalSince1970: 1_700_000_000
         )
-        
+
         let item = TodoItem(
             id: id,
             title: "Prepare test task",
@@ -35,37 +30,13 @@ struct CoreDataTodoStorageTests {
             createdAt: createdAt,
             status: .pending
         )
-        
+
         try await storage.create(item)
-        
-        let snapshots: [StoredTodoSnapshot] =
-        try await withCheckedThrowingContinuation { continuation in
-            stack.container.performBackgroundTask { context in
-                do {
-                    let request = NSFetchRequest<StoredTodo>(
-                        entityName: "StoredTodo"
-                    )
-                    
-                    let storedTodos = try context.fetch(request)
-                    
-                    let snapshots = storedTodos.map {
-                        StoredTodoSnapshot(
-                            id: $0.id,
-                            remoteID: $0.remoteID,
-                            title: $0.title,
-                            details: $0.details,
-                            createdAt: $0.createdAt,
-                            isCompleted: $0.isCompleted
-                        )
-                    }
-                    
-                    continuation.resume(returning: snapshots)
-                } catch {
-                    continuation.resume(throwing: error)
-                }
-            }
-        }
-        
+
+        let storedSnapshots = try await snapshots(
+            in: stack
+        )
+
         let expected = StoredTodoSnapshot(
             id: id,
             remoteID: 0,
@@ -74,83 +45,155 @@ struct CoreDataTodoStorageTests {
             createdAt: createdAt,
             isCompleted: false
         )
-        
-        #expect(snapshots == [expected])
+
+        #expect(storedSnapshots == [expected])
     }
-    
+
     @Test
     func fetchAllReturnsMappedDomainItems() async throws {
-        let stack = CoreDataStack(inMemory: true)
-        try await stack.load()
-        
-        let storage = CoreDataTodoStorage(
-            container: stack.container
-        )
-        
+        let (_, storage) = try await makeStorage()
+
         let item = TodoItem(
             id: UUID(),
             title: "Read stored task",
             details: "Verify StoredTodo mapping",
-            createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+            createdAt: Date(
+                timeIntervalSince1970: 1_700_000_000
+            ),
             status: .completed
         )
-        
+
         try await storage.create(item)
-        
+
         let fetchedItems = try await storage.fetchAll()
-        
+
         #expect(fetchedItems == [item])
     }
-    
+
+    @Test
+    func fetchAllReturnsNewestTodosFirst() async throws {
+        let (_, storage) = try await makeStorage()
+
+        let oldestItem = TodoItem(
+            id: UUID(),
+            title: "Oldest task",
+            details: "",
+            createdAt: Date(
+                timeIntervalSince1970: 1_700_000_000
+            ),
+            status: .pending
+        )
+
+        let newestItem = TodoItem(
+            id: UUID(),
+            title: "Newest task",
+            details: "",
+            createdAt: Date(
+                timeIntervalSince1970: 1_900_000_000
+            ),
+            status: .pending
+        )
+
+        let middleItem = TodoItem(
+            id: UUID(),
+            title: "Middle task",
+            details: "",
+            createdAt: Date(
+                timeIntervalSince1970: 1_800_000_000
+            ),
+            status: .pending
+        )
+
+        try await storage.create(oldestItem)
+        try await storage.create(newestItem)
+        try await storage.create(middleItem)
+
+        let items = try await storage.fetchAll()
+
+        #expect(
+            items == [
+                newestItem,
+                middleItem,
+                oldestItem
+            ]
+        )
+    }
+
+    @Test
+    func fetchAllUsesIDAsTieBreakerForEqualCreationDates() async throws {
+        let (_, storage) = try await makeStorage()
+
+        let firstID = try #require(
+            UUID(
+                uuidString:
+                    "00000000-0000-0000-0000-000000000001"
+            )
+        )
+
+        let secondID = try #require(
+            UUID(
+                uuidString:
+                    "00000000-0000-0000-0000-000000000002"
+            )
+        )
+
+        let createdAt = Date(
+            timeIntervalSince1970: 1_700_000_000
+        )
+
+        let firstItem = TodoItem(
+            id: firstID,
+            title: "First deterministic task",
+            details: "",
+            createdAt: createdAt,
+            status: .pending
+        )
+
+        let secondItem = TodoItem(
+            id: secondID,
+            title: "Second deterministic task",
+            details: "",
+            createdAt: createdAt,
+            status: .pending
+        )
+
+        try await storage.create(secondItem)
+        try await storage.create(firstItem)
+
+        let items = try await storage.fetchAll()
+
+        #expect(
+            items == [
+                firstItem,
+                secondItem
+            ]
+        )
+    }
+
     @Test
     func createImportedTodoStoresRemoteData() async throws {
-        let stack = CoreDataStack(inMemory: true)
-        try await stack.load()
-        
-        let storage = CoreDataTodoStorage(
-            container: stack.container
-        )
-        
+        let (stack, storage) = try await makeStorage()
+
         let importedAt = Date(
             timeIntervalSince1970: 1_700_000_000
         )
-        
+
         try await storage.createImportedTodo(
             remoteID: 42,
             title: "Imported task",
             importedAt: importedAt,
             isCompleted: true
         )
-        
-        let snapshots: [StoredTodoSnapshot] =
-        try await withCheckedThrowingContinuation { continuation in
-            stack.container.performBackgroundTask { context in
-                do {
-                    let request = NSFetchRequest<StoredTodo>(
-                        entityName: "StoredTodo"
-                    )
-                    
-                    let snapshots = try context.fetch(request).map {
-                        StoredTodoSnapshot(
-                            id: $0.id,
-                            remoteID: $0.remoteID,
-                            title: $0.title,
-                            details: $0.details,
-                            createdAt: $0.createdAt,
-                            isCompleted: $0.isCompleted
-                        )
-                    }
-                    
-                    continuation.resume(returning: snapshots)
-                } catch {
-                    continuation.resume(throwing: error)
-                }
-            }
-        }
-        
-        let snapshot = try #require(snapshots.first)
-        
-        #expect(snapshots.count == 1)
+
+        let storedSnapshots = try await snapshots(
+            in: stack
+        )
+
+        let snapshot = try #require(
+            storedSnapshots.first
+        )
+
+        #expect(storedSnapshots.count == 1)
         #expect(snapshot.id != nil)
         #expect(snapshot.remoteID == 42)
         #expect(snapshot.title == "Imported task")
@@ -158,50 +201,41 @@ struct CoreDataTodoStorageTests {
         #expect(snapshot.createdAt == importedAt)
         #expect(snapshot.isCompleted)
     }
-    
+
     @Test
-    func createImportedTodoDoesNotDuplicateExistingRemoteID() async throws {
-        let stack = CoreDataStack(inMemory: true)
-        try await stack.load()
-        
-        let storage = CoreDataTodoStorage(
-            container: stack.container
-        )
-        
+    func createImportedTodoDoesNotDuplicateExistingRemoteID()
+        async throws {
+        let (_, storage) = try await makeStorage()
+
         let importedAt = Date(
             timeIntervalSince1970: 1_700_000_000
         )
-        
+
         try await storage.createImportedTodo(
             remoteID: 42,
             title: "Imported task",
             importedAt: importedAt,
             isCompleted: false
         )
-        
+
         try await storage.createImportedTodo(
             remoteID: 42,
             title: "Changed remote title",
             importedAt: importedAt,
             isCompleted: true
         )
-        
+
         let items = try await storage.fetchAll()
         let item = try #require(items.first)
-        
+
         #expect(items.count == 1)
         #expect(item.title == "Imported task")
         #expect(item.status == .pending)
     }
-    
+
     @Test
     func importTodosStoresUniqueRemoteRecords() async throws {
-        let stack = CoreDataStack(inMemory: true)
-        try await stack.load()
-
-        let storage = CoreDataTodoStorage(
-            container: stack.container
-        )
+        let (_, storage) = try await makeStorage()
 
         let importedAt = Date(
             timeIntervalSince1970: 1_700_000_000
@@ -248,15 +282,10 @@ struct CoreDataTodoStorageTests {
             }
         )
     }
-    
+
     @Test
     func updateChangesStoredTodoStatus() async throws {
-        let stack = CoreDataStack(inMemory: true)
-        try await stack.load()
-
-        let storage = CoreDataTodoStorage(
-            container: stack.container
-        )
+        let (_, storage) = try await makeStorage()
 
         let originalItem = TodoItem(
             id: UUID(),
@@ -284,19 +313,13 @@ struct CoreDataTodoStorageTests {
 
         #expect(items == [updatedItem])
     }
-    
+
     @Test
     func updateThrowsNotFoundForMissingTodo() async {
-        let stack = CoreDataStack(inMemory: true)
-
         let missingID = UUID()
 
         do {
-            try await stack.load()
-
-            let storage = CoreDataTodoStorage(
-                container: stack.container
-            )
+            let (_, storage) = try await makeStorage()
 
             let missingItem = TodoItem(
                 id: missingID,
@@ -323,15 +346,10 @@ struct CoreDataTodoStorageTests {
             )
         }
     }
-    
+
     @Test
     func deleteRemovesExistingTodo() async throws {
-        let stack = CoreDataStack(inMemory: true)
-        try await stack.load()
-
-        let storage = CoreDataTodoStorage(
-            container: stack.container
-        )
+        let (_, storage) = try await makeStorage()
 
         let item = TodoItem(
             id: UUID(),
@@ -350,18 +368,13 @@ struct CoreDataTodoStorageTests {
 
         #expect(storedItems.isEmpty)
     }
-    
+
     @Test
     func deleteThrowsNotFoundForMissingTodo() async {
-        let stack = CoreDataStack(inMemory: true)
         let missingID = UUID()
 
         do {
-            try await stack.load()
-
-            let storage = CoreDataTodoStorage(
-                container: stack.container
-            )
+            let (_, storage) = try await makeStorage()
 
             try await storage.delete(id: missingID)
 
@@ -378,5 +391,63 @@ struct CoreDataTodoStorageTests {
             )
         }
     }
-    
+
+    private func makeStorage() async throws -> (
+        stack: CoreDataStack,
+        storage: CoreDataTodoStorage
+    ) {
+        let stack = CoreDataStack(inMemory: true)
+        try await stack.load()
+
+        let storage = CoreDataTodoStorage(
+            container: stack.container
+        )
+
+        return (stack, storage)
+    }
+
+    private func snapshots(
+        in stack: CoreDataStack
+    ) async throws -> [StoredTodoSnapshot] {
+        try await withCheckedThrowingContinuation {
+            (
+                continuation:
+                    CheckedContinuation<
+                        [StoredTodoSnapshot],
+                        Error
+                    >
+            ) in
+
+            stack.container.performBackgroundTask { context in
+                do {
+                    let request = NSFetchRequest<StoredTodo>(
+                        entityName: "StoredTodo"
+                    )
+
+                    let storedTodos = try context.fetch(
+                        request
+                    )
+
+                    let snapshots = storedTodos.map {
+                        StoredTodoSnapshot(
+                            id: $0.id,
+                            remoteID: $0.remoteID,
+                            title: $0.title,
+                            details: $0.details,
+                            createdAt: $0.createdAt,
+                            isCompleted: $0.isCompleted
+                        )
+                    }
+
+                    continuation.resume(
+                        returning: snapshots
+                    )
+                } catch {
+                    continuation.resume(
+                        throwing: error
+                    )
+                }
+            }
+        }
+    }
 }

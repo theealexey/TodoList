@@ -156,8 +156,7 @@ final class TodoListViewController: UIViewController {
 
     private var items: [TodoItem] = []
     private var loadTask: Task<Void, Never>?
-    private var statusTasks: [UUID: Task<Void, Never>] = [:]
-    private var deleteTasks: [UUID: Task<Void, Never>] = [:]
+    private var mutationTasks: [UUID: Task<Void, Never>] = [:]
 
     init(viewModel: TodoListViewModel) {
         self.viewModel = viewModel
@@ -171,8 +170,7 @@ final class TodoListViewController: UIViewController {
 
     deinit {
         loadTask?.cancel()
-        statusTasks.values.forEach { $0.cancel() }
-        deleteTasks.values.forEach { $0.cancel() }
+        mutationTasks.values.forEach { $0.cancel() }
     }
 
     override func loadView() {
@@ -251,6 +249,9 @@ final class TodoListViewController: UIViewController {
                 showActionFailure(
                     message: Localization.deleteFailureMessage
                 )
+
+            case .operationInProgress:
+                todoListView.tableView.reloadData()
             }
         }
     }
@@ -258,11 +259,9 @@ final class TodoListViewController: UIViewController {
     private func loadTodos() {
         loadTask?.cancel()
 
-        loadTask = Task { [weak self] in
-            guard let self else {
-                return
-            }
+        let viewModel = viewModel
 
+        loadTask = Task {
             await viewModel.load()
         }
     }
@@ -317,23 +316,18 @@ final class TodoListViewController: UIViewController {
     }
 
     private func toggleStatus(for item: TodoItem) {
-        guard statusTasks[item.id] == nil else {
-            return
-        }
+        let viewModel = viewModel
 
-        let task = Task { [weak self] in
-            guard let self else {
-                return
-            }
-
+        performMutation(for: item) { item in
             await viewModel.toggleStatus(for: item)
-            statusTasks[item.id] = nil
         }
-
-        statusTasks[item.id] = task
     }
 
     private func showDeleteConfirmation(for item: TodoItem) {
+        guard mutationTasks[item.id] == nil else {
+            return
+        }
+
         let alert = UIAlertController(
             title: Localization.deleteConfirmationTitle,
             message: Localization.deleteConfirmationMessage,
@@ -360,18 +354,34 @@ final class TodoListViewController: UIViewController {
     }
 
     private func delete(_ item: TodoItem) {
-        guard deleteTasks[item.id] == nil else {
+        let viewModel = viewModel
+
+        performMutation(for: item) { item in
+            await viewModel.delete(item)
+        }
+    }
+
+    private func performMutation(
+        for item: TodoItem,
+        operation: @escaping @MainActor (TodoItem) async -> Void
+    ) {
+        guard mutationTasks[item.id] == nil else {
             return
         }
 
-        deleteTasks[item.id] = Task { [weak self] in
+        let task = Task { [weak self] in
+            await operation(item)
+
             guard let self else {
                 return
             }
 
-            await viewModel.delete(item)
-            deleteTasks[item.id] = nil
+            mutationTasks[item.id] = nil
+            todoListView.tableView.reloadData()
         }
+
+        mutationTasks[item.id] = task
+        todoListView.tableView.reloadData()
     }
 
     private func share(
@@ -449,7 +459,8 @@ extension TodoListViewController: UITableViewDataSource {
                 title: item.title,
                 details: item.details,
                 dateText: dateFormatter.string(from: item.createdAt),
-                isCompleted: item.status == .completed
+                isCompleted: item.status == .completed,
+                isMutationEnabled: mutationTasks[item.id] == nil
             )
         )
 
@@ -482,9 +493,16 @@ extension TodoListViewController: UITableViewDelegate {
                 return nil
             }
 
+            let isMutationEnabled =
+                mutationTasks[item.id] == nil
+
+            let editAttributes: UIMenuElement.Attributes =
+                isMutationEnabled ? [] : .disabled
+
             let editAction = UIAction(
                 title: Localization.editTitle,
-                image: UIImage(systemName: "pencil")
+                image: UIImage(systemName: "pencil"),
+                attributes: editAttributes
             ) { [weak self] _ in
                 self?.onEditTodo?(item)
             }
@@ -503,10 +521,15 @@ extension TodoListViewController: UITableViewDelegate {
                 share(item, sourceView: sourceView)
             }
 
+            let deleteAttributes: UIMenuElement.Attributes =
+                isMutationEnabled
+                    ? .destructive
+                    : [.destructive, .disabled]
+
             let deleteAction = UIAction(
                 title: Localization.deleteTitle,
                 image: UIImage(systemName: "trash"),
-                attributes: .destructive
+                attributes: deleteAttributes
             ) { [weak self] _ in
                 self?.showDeleteConfirmation(for: item)
             }
@@ -523,6 +546,17 @@ extension TodoListViewController: UITableViewDelegate {
 
     func tableView(
         _ tableView: UITableView,
+        shouldHighlightRowAt indexPath: IndexPath
+    ) -> Bool {
+        guard items.indices.contains(indexPath.row) else {
+            return false
+        }
+
+        return mutationTasks[items[indexPath.row].id] == nil
+    }
+
+    func tableView(
+        _ tableView: UITableView,
         didSelectRowAt indexPath: IndexPath
     ) {
         tableView.deselectRow(at: indexPath, animated: true)
@@ -531,6 +565,12 @@ extension TodoListViewController: UITableViewDelegate {
             return
         }
 
-        onEditTodo?(items[indexPath.row])
+        let item = items[indexPath.row]
+
+        guard mutationTasks[item.id] == nil else {
+            return
+        }
+
+        onEditTodo?(item)
     }
 }
