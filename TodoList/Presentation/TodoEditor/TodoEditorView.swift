@@ -97,7 +97,7 @@ final class TodoEditorView: UIView {
     }
 
     private func configure() {
-        backgroundColor = .black
+        backgroundColor = .systemBackground
 
         configureScrollView()
         configureTitleTextView()
@@ -113,17 +113,17 @@ final class TodoEditorView: UIView {
 
     private func configureScrollView() {
         scrollView.translatesAutoresizingMaskIntoConstraints = false
-        scrollView.backgroundColor = .black
+        scrollView.backgroundColor = .systemBackground
         scrollView.keyboardDismissMode = .interactive
 
         contentView.translatesAutoresizingMaskIntoConstraints = false
-        contentView.backgroundColor = .black
+        contentView.backgroundColor = .systemBackground
     }
 
     private func configureTitleTextView() {
         titleTextView.translatesAutoresizingMaskIntoConstraints = false
         titleTextView.backgroundColor = .clear
-        titleTextView.textColor = .white
+        titleTextView.textColor = .label
         titleTextView.tintColor = .systemYellow
         titleTextView.font = UIFontMetrics(
             forTextStyle: .largeTitle
@@ -139,13 +139,14 @@ final class TodoEditorView: UIView {
         titleTextView.textContainer.lineFragmentPadding = 0
         titleTextView.delegate = self
         titleTextView.returnKeyType = .next
+        titleTextView.keyboardAppearance = .default
 
         titlePlaceholderLabel.translatesAutoresizingMaskIntoConstraints =
             false
         titlePlaceholderLabel.font = titleTextView.font
         titlePlaceholderLabel.adjustsFontForContentSizeCategory = true
         titlePlaceholderLabel.textColor =
-            UIColor.white.withAlphaComponent(0.75)
+            UIColor.placeholderText
         titlePlaceholderLabel.numberOfLines = 0
         titlePlaceholderLabel.isUserInteractionEnabled = false
     }
@@ -162,14 +163,14 @@ final class TodoEditorView: UIView {
         )
         dateLabel.adjustsFontForContentSizeCategory = true
         dateLabel.textColor =
-            UIColor.white.withAlphaComponent(0.65)
+            UIColor.secondaryLabel
         dateLabel.numberOfLines = 1
     }
 
     private func configureDetailsTextView() {
         detailsTextView.translatesAutoresizingMaskIntoConstraints = false
         detailsTextView.backgroundColor = .clear
-        detailsTextView.textColor = .white
+        detailsTextView.textColor = .label
         detailsTextView.tintColor = .systemYellow
         detailsTextView.font = UIFontMetrics(
             forTextStyle: .body
@@ -184,13 +185,14 @@ final class TodoEditorView: UIView {
         detailsTextView.textContainerInset = .zero
         detailsTextView.textContainer.lineFragmentPadding = 0
         detailsTextView.delegate = self
+        detailsTextView.keyboardAppearance = .default
 
         detailsPlaceholderLabel.translatesAutoresizingMaskIntoConstraints =
             false
         detailsPlaceholderLabel.font = detailsTextView.font
         detailsPlaceholderLabel.adjustsFontForContentSizeCategory = true
         detailsPlaceholderLabel.textColor =
-            UIColor.white.withAlphaComponent(0.60)
+            UIColor.placeholderText
         detailsPlaceholderLabel.numberOfLines = 0
         detailsPlaceholderLabel.isUserInteractionEnabled = false
     }

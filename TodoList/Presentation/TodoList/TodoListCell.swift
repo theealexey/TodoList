@@ -33,34 +33,13 @@ final class TodoListCell: UITableViewCell {
     }
 
     private enum Palette {
-        static var accent: UIColor {
-            UIColor(
-                red: 1,
-                green: 0.84,
-                blue: 0,
-                alpha: 1
-            )
-        }
-
-        static var primaryText: UIColor {
-            UIColor(white: 0.96, alpha: 1)
-        }
-
-        static var secondaryText: UIColor {
-            UIColor(white: 0.72, alpha: 1)
-        }
-
-        static var completedText: UIColor {
-            UIColor(white: 0.40, alpha: 1)
-        }
-
-        static var pendingBorder: UIColor {
-            UIColor(white: 0.30, alpha: 1)
-        }
-
-        static var separator: UIColor {
-            UIColor(white: 0.18, alpha: 1)
-        }
+        static let background = UIColor.systemBackground
+        static let accent = UIColor.systemYellow
+        static let primaryText = UIColor.label
+        static let secondaryText = UIColor.secondaryLabel
+        static let completedText = UIColor.tertiaryLabel
+        static let pendingBorder = UIColor.tertiaryLabel
+        static let separator = UIColor.separator
     }
 
     private let statusButton = ExpandedHitAreaButton(
@@ -152,8 +131,8 @@ final class TodoListCell: UITableViewCell {
     }
 
     private func configure() {
-        backgroundColor = .black
-        contentView.backgroundColor = .black
+        backgroundColor = Palette.background
+        contentView.backgroundColor = Palette.background
         selectionStyle = .none
 
         configureStatusButton()
@@ -286,11 +265,9 @@ final class TodoListCell: UITableViewCell {
         statusButton.isEnabled = isMutationEnabled
         statusButton.alpha = isMutationEnabled ? 1 : 0.5
 
-        statusButton.layer.borderColor = (
-            isCompleted
-                ? Palette.accent
-                : Palette.pendingBorder
-        ).cgColor
+        statusButton.borderColor = isCompleted
+            ? Palette.accent
+            : Palette.pendingBorder
 
         if isCompleted {
             let configuration =
@@ -353,6 +330,20 @@ final class TodoListCell: UITableViewCell {
     }
 
     private final class ExpandedHitAreaButton: UIButton {
+
+        var borderColor = UIColor.clear {
+            didSet {
+                setNeedsLayout()
+            }
+        }
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+
+            layer.borderColor = borderColor
+                .resolvedColor(with: traitCollection)
+                .cgColor
+        }
 
         override func point(
             inside point: CGPoint,

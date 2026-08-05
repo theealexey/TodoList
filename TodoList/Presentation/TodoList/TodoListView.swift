@@ -40,34 +40,12 @@ final class TodoListView: UIView {
     }
 
     private enum Palette {
-        static let background = UIColor.black
-
-        static let bottomBar = UIColor(
-            white: 0.13,
-            alpha: 1
-        )
-
-        static let searchBackground = UIColor(
-            white: 0.14,
-            alpha: 1
-        )
-
-        static let primaryText = UIColor(
-            white: 0.96,
-            alpha: 1
-        )
-
-        static let secondaryText = UIColor(
-            white: 0.67,
-            alpha: 1
-        )
-
-        static let accent = UIColor(
-            red: 1,
-            green: 0.84,
-            blue: 0,
-            alpha: 1
-        )
+        static let background = UIColor.systemBackground
+        static let bottomBar = UIColor.secondarySystemBackground
+        static let searchBackground = UIColor.secondarySystemBackground
+        static let primaryText = UIColor.label
+        static let secondaryText = UIColor.secondaryLabel
+        static let accent = UIColor.systemYellow
     }
 
     private let texts: Texts
@@ -208,6 +186,8 @@ final class TodoListView: UIView {
 
         searchTextField.clearButtonMode =
             .whileEditing
+
+        searchTextField.keyboardAppearance = .default
 
         searchTextField.autocorrectionType =
             .no
