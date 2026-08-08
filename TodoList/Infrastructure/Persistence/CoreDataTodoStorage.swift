@@ -151,52 +151,60 @@ final class CoreDataTodoStorage {
         try await withCheckedThrowingContinuation {
             (continuation: CheckedContinuation<Void, Error>) in
 
-            container.performBackgroundTask { context in
-                do {
-                    let candidateRemoteIDs = Set(
-                        records.map { Int64($0.remoteID) }
-                    )
+            operationQueue.addOperation { [container] in
+                let context = container.newBackgroundContext()
 
-                    let request = NSFetchRequest<StoredTodo>(
-                        entityName: Self.entityName
-                    )
-                    request.predicate = NSPredicate(
-                        format: "remoteID > %@ AND remoteID IN %@",
-                        NSNumber(value: Self.localRemoteID),
-                        candidateRemoteIDs.map(NSNumber.init(value:))
-                    )
-
-                    let existingRemoteIDs = Set(
-                        try context.fetch(request).map(\.remoteID)
-                    )
-                    var processedRemoteIDs = existingRemoteIDs
-
-                    for record in records {
-                        let remoteID = Int64(record.remoteID)
-
-                        guard processedRemoteIDs.insert(remoteID).inserted else {
-                            continue
-                        }
-
-                        let storedTodo = try Self.makeStoredTodo(
-                            in: context
+                context.performAndWait {
+                    do {
+                        let candidateRemoteIDs = Set(
+                            records.map { Int64($0.remoteID) }
                         )
 
-                        storedTodo.id = UUID()
-                        storedTodo.remoteID = remoteID
-                        storedTodo.title = record.title
-                        storedTodo.details = ""
-                        storedTodo.createdAt = importedAt
-                        storedTodo.isCompleted = record.isCompleted
-                    }
+                        let request = NSFetchRequest<StoredTodo>(
+                            entityName: Self.entityName
+                        )
+                        request.predicate = NSPredicate(
+                            format: "remoteID > %@ AND remoteID IN %@",
+                            NSNumber(value: Self.localRemoteID),
+                            candidateRemoteIDs.map(NSNumber.init(value:))
+                        )
 
-                    if context.hasChanges {
-                        try context.save()
-                    }
+                        let existingRemoteIDs = Set(
+                            try context.fetch(request).map(\.remoteID)
+                        )
 
-                    continuation.resume()
-                } catch {
-                    continuation.resume(throwing: error)
+                        var processedRemoteIDs = existingRemoteIDs
+
+                        for record in records {
+                            let remoteID = Int64(record.remoteID)
+
+                            guard processedRemoteIDs
+                                .insert(remoteID)
+                                .inserted
+                            else {
+                                continue
+                            }
+
+                            let storedTodo = try Self.makeStoredTodo(
+                                in: context
+                            )
+
+                            storedTodo.id = UUID()
+                            storedTodo.remoteID = remoteID
+                            storedTodo.title = record.title
+                            storedTodo.details = ""
+                            storedTodo.createdAt = importedAt
+                            storedTodo.isCompleted = record.isCompleted
+                        }
+
+                        if context.hasChanges {
+                            try context.save()
+                        }
+
+                        continuation.resume()
+                    } catch {
+                        continuation.resume(throwing: error)
+                    }
                 }
             }
         }
