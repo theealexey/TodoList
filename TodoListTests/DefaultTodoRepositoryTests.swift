@@ -27,18 +27,7 @@ struct DefaultTodoRepositoryTests {
             container: stack.container
         )
 
-        let url = try #require(
-            URL(string: "https://dummyjson.com/todos?limit=0")
-        )
-
-        let response = try #require(
-            HTTPURLResponse(
-                url: url,
-                statusCode: 200,
-                httpVersion: nil,
-                headerFields: nil
-            )
-        )
+        
 
         let json = """
         {
@@ -51,14 +40,34 @@ struct DefaultTodoRepositoryTests {
           ]
         }
         """
+        
+        let session = URLProtocolStub.makeSession { request in
+            guard let url = request.url else {
+                throw URLError(.badURL)
+            }
+
+            #expect(
+                url.absoluteString
+                    == "https://dummyjson.com/todos?limit=0"
+            )
+
+            guard let response = HTTPURLResponse(
+                url: url,
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: nil
+            ) else {
+                throw URLError(.badServerResponse)
+            }
+
+            return (
+                response,
+                Data(json.utf8)
+            )
+        }
 
         let api = TodosAPI(
-            dataLoader: { _ in
-                (
-                    Data(json.utf8),
-                    response
-                )
-            }
+            session: session
         )
 
         let stateStore = InitialTodoImportStateStore(
