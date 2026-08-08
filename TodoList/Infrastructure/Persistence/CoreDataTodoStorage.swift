@@ -19,9 +19,17 @@ final class CoreDataTodoStorage {
     private static let localRemoteID: Int64 = 0
 
     private let container: NSPersistentContainer
+    private let operationQueue: OperationQueue
 
-    init(container: NSPersistentContainer) {
+    init(
+        container: NSPersistentContainer,
+        operationQueue: OperationQueue = OperationQueue()
+    ) {
         self.container = container
+        self.operationQueue = operationQueue
+
+        operationQueue.maxConcurrentOperationCount = 1
+        operationQueue.qualityOfService = .userInitiated
     }
 
     func create(_ item: TodoItem) async throws {
@@ -200,26 +208,30 @@ final class CoreDataTodoStorage {
                 continuation: CheckedContinuation<[TodoItem], Error>
             ) in
 
-            container.performBackgroundTask { context in
-                do {
-                    let request = NSFetchRequest<StoredTodo>(
-                        entityName: Self.entityName
-                    )
-                    request.sortDescriptors = [
-                        NSSortDescriptor(
-                            key: #keyPath(StoredTodo.createdAt),
-                            ascending: false
+            operationQueue.addOperation { [container] in
+                let context = container.newBackgroundContext()
+
+                context.performAndWait {
+                    do {
+                        let request = NSFetchRequest<StoredTodo>(
+                            entityName: Self.entityName
                         )
-                    ]
+                        request.sortDescriptors = [
+                            NSSortDescriptor(
+                                key: #keyPath(StoredTodo.createdAt),
+                                ascending: false
+                            )
+                        ]
 
-                    let items = try context.fetch(request).map {
-                        try Self.makeTodoItem(from: $0)
+                        let items = try context.fetch(request).map {
+                            try Self.makeTodoItem(from: $0)
+                        }
+                        .sorted(by: Self.isOrderedBefore)
+
+                        continuation.resume(returning: items)
+                    } catch {
+                        continuation.resume(throwing: error)
                     }
-                    .sorted(by: Self.isOrderedBefore)
-
-                    continuation.resume(returning: items)
-                } catch {
-                    continuation.resume(throwing: error)
                 }
             }
         }
