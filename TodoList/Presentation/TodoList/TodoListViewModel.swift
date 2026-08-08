@@ -21,6 +21,7 @@ final class TodoListViewModel {
     private let loadTodosUseCase: LoadTodosUseCase
     private let toggleTodoStatusUseCase: ToggleTodoStatusUseCase
     private let deleteTodoUseCase: DeleteTodoUseCase
+    private let searchQueue: OperationQueue
 
     private var allItems: [TodoItem] = []
     private var searchQuery = ""
@@ -38,13 +39,18 @@ final class TodoListViewModel {
     init(
         loadTodosUseCase: LoadTodosUseCase,
         toggleTodoStatusUseCase: ToggleTodoStatusUseCase,
-        deleteTodoUseCase: DeleteTodoUseCase
+        deleteTodoUseCase: DeleteTodoUseCase,
+        searchQueue: OperationQueue = OperationQueue()
     ) {
         self.loadTodosUseCase = loadTodosUseCase
         self.toggleTodoStatusUseCase = toggleTodoStatusUseCase
         self.deleteTodoUseCase = deleteTodoUseCase
-    }
+        self.searchQueue = searchQueue
 
+        searchQueue.maxConcurrentOperationCount = 1
+        searchQueue.qualityOfService = .userInitiated
+    }
+    
     func load() async {
         state = .loading
 
