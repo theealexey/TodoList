@@ -26,6 +26,7 @@ final class TodoListViewModel {
     private var allItems: [TodoItem] = []
     private var searchQuery = ""
     private var processingItemIDs: Set<UUID> = []
+    private var searchRevision = 0
 
     private(set) var state: State = .idle {
         didSet {
@@ -124,6 +125,11 @@ final class TodoListViewModel {
     }
 
     private func applySearch() {
+        searchRevision += 1
+        let revision = searchRevision
+
+        searchQueue.cancelAllOperations()
+
         guard !allItems.isEmpty else {
             state = .empty
             return
@@ -134,17 +140,32 @@ final class TodoListViewModel {
             return
         }
 
-        let filteredItems = allItems.filter { item in
-            item.title.localizedCaseInsensitiveContains(
-                searchQuery
-            )
-            || item.details.localizedCaseInsensitiveContains(
-                searchQuery
-            )
-        }
+        let items = allItems
+        let query = searchQuery
 
-        state = filteredItems.isEmpty
-            ? .noResults
-            : .content(filteredItems)
+        searchQueue.addOperation {
+            let filteredItems = items.filter { item in
+                item.title.localizedCaseInsensitiveContains(
+                    query
+                )
+                || item.details.localizedCaseInsensitiveContains(
+                    query
+                )
+            }
+
+            DispatchQueue.main.async { [weak self] in
+                guard let self else {
+                    return
+                }
+
+                guard self.searchRevision == revision else {
+                    return
+                }
+
+                self.state = filteredItems.isEmpty
+                    ? .noResults
+                    : .content(filteredItems)
+            }
+        }
     }
 }

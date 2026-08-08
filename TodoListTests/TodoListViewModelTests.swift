@@ -107,6 +107,26 @@ struct TodoListViewModelTests {
         )
     }
     
+    private func waitForState(
+        _ expectedState: TodoListViewModel.State,
+        in viewModel: TodoListViewModel
+    ) async {
+        guard viewModel.state != expectedState else {
+            return
+        }
+
+        await withCheckedContinuation { continuation in
+            viewModel.onStateChange = { state in
+                guard state == expectedState else {
+                    return
+                }
+
+                viewModel.onStateChange = nil
+                continuation.resume()
+            }
+        }
+    }
+    
     @Test
     func loadTransitionsFromLoadingToContent() async {
         let expectedItems = [
@@ -278,11 +298,21 @@ struct TodoListViewModelTests {
         
         viewModel.updateSearchQuery("MILK")
         
+        await waitForState(
+            .content([firstItem]),
+            in: viewModel
+        )
+        
         #expect(
             viewModel.state == .content([firstItem])
         )
         
         viewModel.updateSearchQuery("bathroom")
+        
+        await waitForState(
+            .content([secondItem]),
+            in: viewModel
+        )
         
         #expect(
             viewModel.state == .content([secondItem])
@@ -367,7 +397,12 @@ struct TodoListViewModelTests {
         viewModel.updateSearchQuery(
             "Something completely different"
         )
-        
+
+        await waitForState(
+            .noResults,
+            in: viewModel
+        )
+
         #expect(viewModel.state == .noResults)
     }
     
@@ -409,8 +444,9 @@ struct TodoListViewModelTests {
         await viewModel.load()
         viewModel.updateSearchQuery("milk")
 
-        await viewModel.toggleStatus(
-            for: firstItem
+        await waitForState(
+            .content([firstItem]),
+            in: viewModel
         )
 
         let expectedItem = TodoItem(
@@ -419,6 +455,15 @@ struct TodoListViewModelTests {
             details: firstItem.details,
             createdAt: firstItem.createdAt,
             status: .completed
+        )
+
+        await viewModel.toggleStatus(
+            for: firstItem
+        )
+
+        await waitForState(
+            .content([expectedItem]),
+            in: viewModel
         )
 
         #expect(
@@ -512,7 +557,17 @@ struct TodoListViewModelTests {
         await viewModel.load()
         viewModel.updateSearchQuery("clean")
 
+        await waitForState(
+            .content([secondItem]),
+            in: viewModel
+        )
+
         await viewModel.delete(secondItem)
+
+        await waitForState(
+            .noResults,
+            in: viewModel
+        )
 
         #expect(viewModel.state == .noResults)
 
