@@ -474,76 +474,6 @@ extension TodoListViewController: UITableViewDelegate {
 
     func tableView(
         _ tableView: UITableView,
-        contextMenuConfigurationForRowAt indexPath: IndexPath,
-        point: CGPoint
-    ) -> UIContextMenuConfiguration? {
-        guard items.indices.contains(indexPath.row) else {
-            return nil
-        }
-
-        let item = items[indexPath.row]
-
-        return UIContextMenuConfiguration(
-            identifier: item.id as NSUUID,
-            previewProvider: nil
-        ) { [weak self, weak tableView] _ in
-            guard let self, let tableView else {
-                return nil
-            }
-
-            let isMutationEnabled =
-                mutationTasks[item.id] == nil
-
-            let editAttributes: UIMenuElement.Attributes =
-                isMutationEnabled ? [] : .disabled
-
-            let editAction = UIAction(
-                title: Localization.editTitle,
-                image: UIImage(systemName: "pencil"),
-                attributes: editAttributes
-            ) { [weak self] _ in
-                self?.onEditTodo?(item)
-            }
-
-            let shareAction = UIAction(
-                title: Localization.shareTitle,
-                image: UIImage(systemName: "square.and.arrow.up")
-            ) { [weak self, weak tableView] _ in
-                guard let self, let tableView else {
-                    return
-                }
-
-                let sourceView: UIView =
-                    tableView.cellForRow(at: indexPath) ?? tableView
-
-                share(item, sourceView: sourceView)
-            }
-
-            let deleteAttributes: UIMenuElement.Attributes =
-                isMutationEnabled
-                    ? .destructive
-                    : [.destructive, .disabled]
-
-            let deleteAction = UIAction(
-                title: Localization.deleteTitle,
-                image: UIImage(systemName: "trash"),
-                attributes: deleteAttributes
-            ) { [weak self] _ in
-                self?.showDeleteConfirmation(for: item)
-            }
-
-            return UIMenu(
-                children: [
-                    editAction,
-                    shareAction,
-                    deleteAction
-                ]
-            )
-        }
-    }
-
-    func tableView(
-        _ tableView: UITableView,
         trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath
     ) -> UISwipeActionsConfiguration? {
         guard items.indices.contains(indexPath.row) else {
@@ -565,7 +495,7 @@ extension TodoListViewController: UITableViewDelegate {
                 return
             }
 
-            delete(item)
+            showDeleteConfirmation(for: item)
             completionHandler(true)
         }
 
@@ -573,15 +503,57 @@ extension TodoListViewController: UITableViewDelegate {
             systemName: "trash"
         )
 
+        let shareAction = UIContextualAction(
+            style: .normal,
+            title: Localization.shareTitle
+        ) { [weak self] _, sourceView, completionHandler in
+            guard let self else {
+                completionHandler(false)
+                return
+            }
+
+            share(
+                item,
+                sourceView: sourceView
+            )
+
+            completionHandler(true)
+        }
+
+        shareAction.image = UIImage(
+            systemName: "square.and.arrow.up"
+        )
+
+        let editAction = UIContextualAction(
+            style: .normal,
+            title: Localization.editTitle
+        ) { [weak self] _, _, completionHandler in
+            guard let self else {
+                completionHandler(false)
+                return
+            }
+
+            onEditTodo?(item)
+            completionHandler(true)
+        }
+
+        editAction.image = UIImage(
+            systemName: "pencil"
+        )
+
         let configuration = UISwipeActionsConfiguration(
-            actions: [deleteAction]
+            actions: [
+                deleteAction,
+                shareAction,
+                editAction
+            ]
         )
 
         configuration.performsFirstActionWithFullSwipe = false
 
         return configuration
     }
-    
+
     func tableView(
         _ tableView: UITableView,
         shouldHighlightRowAt indexPath: IndexPath
@@ -597,7 +569,10 @@ extension TodoListViewController: UITableViewDelegate {
         _ tableView: UITableView,
         didSelectRowAt indexPath: IndexPath
     ) {
-        tableView.deselectRow(at: indexPath, animated: true)
+        tableView.deselectRow(
+            at: indexPath,
+            animated: true
+        )
 
         guard items.indices.contains(indexPath.row) else {
             return
