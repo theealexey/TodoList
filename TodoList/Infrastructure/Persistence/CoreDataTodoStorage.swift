@@ -70,32 +70,45 @@ final class CoreDataTodoStorage {
         try await withCheckedThrowingContinuation {
             (continuation: CheckedContinuation<Void, Error>) in
 
-            container.performBackgroundTask { context in
-                do {
-                    let request = NSFetchRequest<StoredTodo>(
-                        entityName: Self.entityName
-                    )
-                    request.predicate = NSPredicate(
-                        format: "id == %@",
-                        item.id as NSUUID
-                    )
-                    request.fetchLimit = 1
+            operationQueue.addOperation { [container] in
+                let context = container.newBackgroundContext()
 
-                    guard let storedTodo = try context.fetch(request).first else {
-                        throw CoreDataTodoStorageError.todoNotFound(
-                            id: item.id
+                context.performAndWait {
+                    do {
+                        let request = NSFetchRequest<StoredTodo>(
+                            entityName: Self.entityName
+                        )
+
+                        request.predicate = NSPredicate(
+                            format: "id == %@",
+                            item.id as NSUUID
+                        )
+
+                        request.fetchLimit = 1
+
+                        guard let storedTodo = try context
+                            .fetch(request)
+                            .first
+                        else {
+                            throw CoreDataTodoStorageError.todoNotFound(
+                                id: item.id
+                            )
+                        }
+
+                        storedTodo.title = item.title
+                        storedTodo.details = item.details
+                        storedTodo.createdAt = item.createdAt
+                        storedTodo.isCompleted =
+                            item.status == .completed
+
+                        try context.save()
+
+                        continuation.resume()
+                    } catch {
+                        continuation.resume(
+                            throwing: error
                         )
                     }
-
-                    storedTodo.title = item.title
-                    storedTodo.details = item.details
-                    storedTodo.createdAt = item.createdAt
-                    storedTodo.isCompleted = item.status == .completed
-
-                    try context.save()
-                    continuation.resume()
-                } catch {
-                    continuation.resume(throwing: error)
                 }
             }
         }
