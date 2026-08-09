@@ -31,18 +31,6 @@ struct InitialTodoImporterTests {
             container: stack.container
         )
 
-        let url = try #require(
-            URL(string: "https://dummyjson.com/todos?limit=0")
-        )
-
-        let response = try #require(
-            HTTPURLResponse(
-                url: url,
-                statusCode: 200,
-                httpVersion: nil,
-                headerFields: nil
-            )
-        )
 
         let json = """
         {
@@ -63,16 +51,34 @@ struct InitialTodoImporterTests {
           "limit": 0
         }
         """
+        
+        let session = URLProtocolStub.makeSession { request in
+            guard let url = request.url else {
+                throw URLError(.badURL)
+            }
+
+            #expect(
+                url.absoluteString
+                    == "https://dummyjson.com/todos?limit=0"
+            )
+
+            guard let response = HTTPURLResponse(
+                url: url,
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: nil
+            ) else {
+                throw URLError(.badServerResponse)
+            }
+
+            return (
+                response,
+                Data(json.utf8)
+            )
+        }
 
         let api = TodosAPI(
-            dataLoader: { request in
-                #expect(request.url == url)
-
-                return (
-                    Data(json.utf8),
-                    response
-                )
-            }
+            session: session
         )
 
         let importer = InitialTodoImporter(
@@ -138,19 +144,6 @@ struct InitialTodoImporterTests {
             container: stack.container
         )
 
-        let url = try #require(
-            URL(string: "https://dummyjson.com/todos?limit=0")
-        )
-
-        let response = try #require(
-            HTTPURLResponse(
-                url: url,
-                statusCode: 200,
-                httpVersion: nil,
-                headerFields: nil
-            )
-        )
-
         let json = """
         {
           "todos": [
@@ -163,14 +156,30 @@ struct InitialTodoImporterTests {
         }
         """
 
-        let firstAPI = TodosAPI(
-            dataLoader: { _ in
-                (
-                    Data(json.utf8),
-                    response
-                )
+        let firstSession = URLProtocolStub.makeSession { request in
+            guard let url = request.url else {
+                throw URLError(.badURL)
             }
+
+            guard let response = HTTPURLResponse(
+                url: url,
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: nil
+            ) else {
+                throw URLError(.badServerResponse)
+            }
+
+            return (
+                response,
+                Data(json.utf8)
+            )
+        }
+
+        let firstAPI = TodosAPI(
+            session: firstSession
         )
+        
 
         let firstImporter = InitialTodoImporter(
             api: firstAPI,
@@ -186,10 +195,12 @@ struct InitialTodoImporterTests {
             importedAt: firstImportedAt
         )
 
+        let secondSession = URLProtocolStub.makeSession { _ in
+            throw URLError(.badServerResponse)
+        }
+
         let secondAPI = TodosAPI(
-            dataLoader: { _ -> (Data, URLResponse) in
-                throw URLError(.badServerResponse)
-            }
+            session: secondSession
         )
 
         let secondImporter = InitialTodoImporter(
@@ -238,10 +249,12 @@ struct InitialTodoImporterTests {
             container: stack.container
         )
 
+        let failingSession = URLProtocolStub.makeSession { _ in
+            throw URLError(.notConnectedToInternet)
+        }
+
         let failingAPI = TodosAPI(
-            dataLoader: { _ -> (Data, URLResponse) in
-                throw URLError(.notConnectedToInternet)
-            }
+            session: failingSession
         )
 
         let failingImporter = InitialTodoImporter(
@@ -262,19 +275,6 @@ struct InitialTodoImporterTests {
             #expect(error.code == .notConnectedToInternet)
         }
 
-        let url = try #require(
-            URL(string: "https://dummyjson.com/todos?limit=0")
-        )
-
-        let response = try #require(
-            HTTPURLResponse(
-                url: url,
-                statusCode: 200,
-                httpVersion: nil,
-                headerFields: nil
-            )
-        )
-
         let json = """
         {
           "todos": [
@@ -287,13 +287,28 @@ struct InitialTodoImporterTests {
         }
         """
 
-        let successfulAPI = TodosAPI(
-            dataLoader: { _ in
-                (
-                    Data(json.utf8),
-                    response
-                )
+        let successfulSession = URLProtocolStub.makeSession { request in
+            guard let url = request.url else {
+                throw URLError(.badURL)
             }
+
+            guard let response = HTTPURLResponse(
+                url: url,
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: nil
+            ) else {
+                throw URLError(.badServerResponse)
+            }
+
+            return (
+                response,
+                Data(json.utf8)
+            )
+        }
+
+        let successfulAPI = TodosAPI(
+            session: successfulSession
         )
 
         let successfulImporter = InitialTodoImporter(

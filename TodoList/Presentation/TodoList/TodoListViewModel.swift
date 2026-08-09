@@ -21,10 +21,12 @@ final class TodoListViewModel {
     private let loadTodosUseCase: LoadTodosUseCase
     private let toggleTodoStatusUseCase: ToggleTodoStatusUseCase
     private let deleteTodoUseCase: DeleteTodoUseCase
+    private let searchQueue: OperationQueue
 
     private var allItems: [TodoItem] = []
     private var searchQuery = ""
     private var processingItemIDs: Set<UUID> = []
+    private var searchRevision = 0
 
     private(set) var state: State = .idle {
         didSet {
@@ -38,13 +40,18 @@ final class TodoListViewModel {
     init(
         loadTodosUseCase: LoadTodosUseCase,
         toggleTodoStatusUseCase: ToggleTodoStatusUseCase,
-        deleteTodoUseCase: DeleteTodoUseCase
+        deleteTodoUseCase: DeleteTodoUseCase,
+        searchQueue: OperationQueue = OperationQueue()
     ) {
         self.loadTodosUseCase = loadTodosUseCase
         self.toggleTodoStatusUseCase = toggleTodoStatusUseCase
         self.deleteTodoUseCase = deleteTodoUseCase
-    }
+        self.searchQueue = searchQueue
 
+        searchQueue.maxConcurrentOperationCount = 1
+        searchQueue.qualityOfService = .userInitiated
+    }
+    
     func load() async {
         state = .loading
 
@@ -118,6 +125,11 @@ final class TodoListViewModel {
     }
 
     private func applySearch() {
+        searchRevision += 1
+        let revision = searchRevision
+
+        searchQueue.cancelAllOperations()
+
         guard !allItems.isEmpty else {
             state = .empty
             return
@@ -128,17 +140,32 @@ final class TodoListViewModel {
             return
         }
 
-        let filteredItems = allItems.filter { item in
-            item.title.localizedCaseInsensitiveContains(
-                searchQuery
-            )
-            || item.details.localizedCaseInsensitiveContains(
-                searchQuery
-            )
-        }
+        let items = allItems
+        let query = searchQuery
 
-        state = filteredItems.isEmpty
-            ? .noResults
-            : .content(filteredItems)
+        searchQueue.addOperation {
+            let filteredItems = items.filter { item in
+                item.title.localizedCaseInsensitiveContains(
+                    query
+                )
+                || item.details.localizedCaseInsensitiveContains(
+                    query
+                )
+            }
+
+            DispatchQueue.main.async { [weak self] in
+                guard let self else {
+                    return
+                }
+
+                guard self.searchRevision == revision else {
+                    return
+                }
+
+                self.state = filteredItems.isEmpty
+                    ? .noResults
+                    : .content(filteredItems)
+            }
+        }
     }
 }

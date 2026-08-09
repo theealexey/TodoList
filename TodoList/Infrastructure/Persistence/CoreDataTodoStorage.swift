@@ -19,32 +19,48 @@ final class CoreDataTodoStorage {
     private static let localRemoteID: Int64 = 0
 
     private let container: NSPersistentContainer
+    private let operationQueue: OperationQueue
 
-    init(container: NSPersistentContainer) {
+    init(
+        container: NSPersistentContainer,
+        operationQueue: OperationQueue = OperationQueue()
+    ) {
         self.container = container
+        self.operationQueue = operationQueue
+
+        operationQueue.maxConcurrentOperationCount = 1
+        operationQueue.qualityOfService = .userInitiated
     }
 
     func create(_ item: TodoItem) async throws {
         try await withCheckedThrowingContinuation {
             (continuation: CheckedContinuation<Void, Error>) in
 
-            container.performBackgroundTask { context in
-                do {
-                    let storedTodo = try Self.makeStoredTodo(
-                        in: context
-                    )
+            operationQueue.addOperation { [container] in
+                let context = container.newBackgroundContext()
 
-                    storedTodo.id = item.id
-                    storedTodo.remoteID = Self.localRemoteID
-                    storedTodo.title = item.title
-                    storedTodo.details = item.details
-                    storedTodo.createdAt = item.createdAt
-                    storedTodo.isCompleted = item.status == .completed
+                context.performAndWait {
+                    do {
+                        let storedTodo = try Self.makeStoredTodo(
+                            in: context
+                        )
 
-                    try context.save()
-                    continuation.resume()
-                } catch {
-                    continuation.resume(throwing: error)
+                        storedTodo.id = item.id
+                        storedTodo.remoteID = Self.localRemoteID
+                        storedTodo.title = item.title
+                        storedTodo.details = item.details
+                        storedTodo.createdAt = item.createdAt
+                        storedTodo.isCompleted =
+                            item.status == .completed
+
+                        try context.save()
+
+                        continuation.resume()
+                    } catch {
+                        continuation.resume(
+                            throwing: error
+                        )
+                    }
                 }
             }
         }
@@ -54,32 +70,45 @@ final class CoreDataTodoStorage {
         try await withCheckedThrowingContinuation {
             (continuation: CheckedContinuation<Void, Error>) in
 
-            container.performBackgroundTask { context in
-                do {
-                    let request = NSFetchRequest<StoredTodo>(
-                        entityName: Self.entityName
-                    )
-                    request.predicate = NSPredicate(
-                        format: "id == %@",
-                        item.id as NSUUID
-                    )
-                    request.fetchLimit = 1
+            operationQueue.addOperation { [container] in
+                let context = container.newBackgroundContext()
 
-                    guard let storedTodo = try context.fetch(request).first else {
-                        throw CoreDataTodoStorageError.todoNotFound(
-                            id: item.id
+                context.performAndWait {
+                    do {
+                        let request = NSFetchRequest<StoredTodo>(
+                            entityName: Self.entityName
+                        )
+
+                        request.predicate = NSPredicate(
+                            format: "id == %@",
+                            item.id as NSUUID
+                        )
+
+                        request.fetchLimit = 1
+
+                        guard let storedTodo = try context
+                            .fetch(request)
+                            .first
+                        else {
+                            throw CoreDataTodoStorageError.todoNotFound(
+                                id: item.id
+                            )
+                        }
+
+                        storedTodo.title = item.title
+                        storedTodo.details = item.details
+                        storedTodo.createdAt = item.createdAt
+                        storedTodo.isCompleted =
+                            item.status == .completed
+
+                        try context.save()
+
+                        continuation.resume()
+                    } catch {
+                        continuation.resume(
+                            throwing: error
                         )
                     }
-
-                    storedTodo.title = item.title
-                    storedTodo.details = item.details
-                    storedTodo.createdAt = item.createdAt
-                    storedTodo.isCompleted = item.status == .completed
-
-                    try context.save()
-                    continuation.resume()
-                } catch {
-                    continuation.resume(throwing: error)
                 }
             }
         }
@@ -89,26 +118,40 @@ final class CoreDataTodoStorage {
         try await withCheckedThrowingContinuation {
             (continuation: CheckedContinuation<Void, Error>) in
 
-            container.performBackgroundTask { context in
-                do {
-                    let request = NSFetchRequest<StoredTodo>(
-                        entityName: Self.entityName
-                    )
-                    request.predicate = NSPredicate(
-                        format: "id == %@",
-                        id as NSUUID
-                    )
-                    request.fetchLimit = 1
+            operationQueue.addOperation { [container] in
+                let context = container.newBackgroundContext()
 
-                    guard let storedTodo = try context.fetch(request).first else {
-                        throw CoreDataTodoStorageError.todoNotFound(id: id)
+                context.performAndWait {
+                    do {
+                        let request = NSFetchRequest<StoredTodo>(
+                            entityName: Self.entityName
+                        )
+
+                        request.predicate = NSPredicate(
+                            format: "id == %@",
+                            id as NSUUID
+                        )
+
+                        request.fetchLimit = 1
+
+                        guard let storedTodo = try context
+                            .fetch(request)
+                            .first
+                        else {
+                            throw CoreDataTodoStorageError.todoNotFound(
+                                id: id
+                            )
+                        }
+
+                        context.delete(storedTodo)
+                        try context.save()
+
+                        continuation.resume()
+                    } catch {
+                        continuation.resume(
+                            throwing: error
+                        )
                     }
-
-                    context.delete(storedTodo)
-                    try context.save()
-                    continuation.resume()
-                } catch {
-                    continuation.resume(throwing: error)
                 }
             }
         }
@@ -143,52 +186,60 @@ final class CoreDataTodoStorage {
         try await withCheckedThrowingContinuation {
             (continuation: CheckedContinuation<Void, Error>) in
 
-            container.performBackgroundTask { context in
-                do {
-                    let candidateRemoteIDs = Set(
-                        records.map { Int64($0.remoteID) }
-                    )
+            operationQueue.addOperation { [container] in
+                let context = container.newBackgroundContext()
 
-                    let request = NSFetchRequest<StoredTodo>(
-                        entityName: Self.entityName
-                    )
-                    request.predicate = NSPredicate(
-                        format: "remoteID > %@ AND remoteID IN %@",
-                        NSNumber(value: Self.localRemoteID),
-                        candidateRemoteIDs.map(NSNumber.init(value:))
-                    )
-
-                    let existingRemoteIDs = Set(
-                        try context.fetch(request).map(\.remoteID)
-                    )
-                    var processedRemoteIDs = existingRemoteIDs
-
-                    for record in records {
-                        let remoteID = Int64(record.remoteID)
-
-                        guard processedRemoteIDs.insert(remoteID).inserted else {
-                            continue
-                        }
-
-                        let storedTodo = try Self.makeStoredTodo(
-                            in: context
+                context.performAndWait {
+                    do {
+                        let candidateRemoteIDs = Set(
+                            records.map { Int64($0.remoteID) }
                         )
 
-                        storedTodo.id = UUID()
-                        storedTodo.remoteID = remoteID
-                        storedTodo.title = record.title
-                        storedTodo.details = ""
-                        storedTodo.createdAt = importedAt
-                        storedTodo.isCompleted = record.isCompleted
-                    }
+                        let request = NSFetchRequest<StoredTodo>(
+                            entityName: Self.entityName
+                        )
+                        request.predicate = NSPredicate(
+                            format: "remoteID > %@ AND remoteID IN %@",
+                            NSNumber(value: Self.localRemoteID),
+                            candidateRemoteIDs.map(NSNumber.init(value:))
+                        )
 
-                    if context.hasChanges {
-                        try context.save()
-                    }
+                        let existingRemoteIDs = Set(
+                            try context.fetch(request).map(\.remoteID)
+                        )
 
-                    continuation.resume()
-                } catch {
-                    continuation.resume(throwing: error)
+                        var processedRemoteIDs = existingRemoteIDs
+
+                        for record in records {
+                            let remoteID = Int64(record.remoteID)
+
+                            guard processedRemoteIDs
+                                .insert(remoteID)
+                                .inserted
+                            else {
+                                continue
+                            }
+
+                            let storedTodo = try Self.makeStoredTodo(
+                                in: context
+                            )
+
+                            storedTodo.id = UUID()
+                            storedTodo.remoteID = remoteID
+                            storedTodo.title = record.title
+                            storedTodo.details = ""
+                            storedTodo.createdAt = importedAt
+                            storedTodo.isCompleted = record.isCompleted
+                        }
+
+                        if context.hasChanges {
+                            try context.save()
+                        }
+
+                        continuation.resume()
+                    } catch {
+                        continuation.resume(throwing: error)
+                    }
                 }
             }
         }
@@ -200,26 +251,30 @@ final class CoreDataTodoStorage {
                 continuation: CheckedContinuation<[TodoItem], Error>
             ) in
 
-            container.performBackgroundTask { context in
-                do {
-                    let request = NSFetchRequest<StoredTodo>(
-                        entityName: Self.entityName
-                    )
-                    request.sortDescriptors = [
-                        NSSortDescriptor(
-                            key: #keyPath(StoredTodo.createdAt),
-                            ascending: false
+            operationQueue.addOperation { [container] in
+                let context = container.newBackgroundContext()
+
+                context.performAndWait {
+                    do {
+                        let request = NSFetchRequest<StoredTodo>(
+                            entityName: Self.entityName
                         )
-                    ]
+                        request.sortDescriptors = [
+                            NSSortDescriptor(
+                                key: #keyPath(StoredTodo.createdAt),
+                                ascending: false
+                            )
+                        ]
 
-                    let items = try context.fetch(request).map {
-                        try Self.makeTodoItem(from: $0)
+                        let items = try context.fetch(request).map {
+                            try Self.makeTodoItem(from: $0)
+                        }
+                        .sorted(by: Self.isOrderedBefore)
+
+                        continuation.resume(returning: items)
+                    } catch {
+                        continuation.resume(throwing: error)
                     }
-                    .sorted(by: Self.isOrderedBefore)
-
-                    continuation.resume(returning: items)
-                } catch {
-                    continuation.resume(throwing: error)
                 }
             }
         }

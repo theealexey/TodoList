@@ -2,20 +2,17 @@ import Foundation
 
 struct TodosAPI {
 
-    typealias DataLoader = (
-        URLRequest
-    ) async throws -> (Data, URLResponse)
+    private let session: URLSession
+    private let operationQueue: OperationQueue
+    
+    init(
+        session: URLSession = .shared,
+        operationQueue: OperationQueue = OperationQueue()
+    ) {
+        self.session = session
+        self.operationQueue = operationQueue
 
-    private let dataLoader: DataLoader
-
-    init(session: URLSession = .shared) {
-        dataLoader = { request in
-            try await session.data(for: request)
-        }
-    }
-
-    init(dataLoader: @escaping DataLoader) {
-        self.dataLoader = dataLoader
+        operationQueue.qualityOfService = .userInitiated
     }
 
     func fetchTodos() async throws -> [TodoDTO] {
@@ -30,21 +27,21 @@ struct TodosAPI {
             timeoutInterval: 15
         )
 
-        let (data, response) = try await dataLoader(request)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw URLError(.badServerResponse)
+        return try await withCheckedThrowingContinuation {
+            (
+                continuation:
+                    CheckedContinuation<[TodoDTO], Error>
+            ) in
+            
+            let operation = TodosFetchOperation(
+                request: request,
+                session: session
+            ) { result in
+                continuation.resume(with: result)
+            }
+            
+            operationQueue.addOperation(operation)
         }
 
-        guard (200..<300).contains(httpResponse.statusCode) else {
-            throw URLError(.badServerResponse)
-        }
-
-        let responseDTO = try JSONDecoder().decode(
-            TodosResponseDTO.self,
-            from: data
-        )
-
-        return responseDTO.todos
     }
 }

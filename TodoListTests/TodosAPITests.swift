@@ -3,7 +3,7 @@ import Testing
 @testable import TodoList
 
 struct TodosAPITests {
-
+    
     @Test
     func fetchTodosReturnsDecodedTodosForSuccessfulResponse() async throws {
         let json = """
@@ -20,25 +20,31 @@ struct TodosAPITests {
 
         let data = try #require(json.data(using: .utf8))
 
-        let api = TodosAPI { request in
-            let url = try #require(request.url)
+        let session = URLProtocolStub.makeSession { request in
+            guard let url = request.url else {
+                throw URLError(.badURL)
+            }
 
             #expect(
                 url.absoluteString
                     == "https://dummyjson.com/todos?limit=0"
             )
 
-            let response = try #require(
-                HTTPURLResponse(
-                    url: url,
-                    statusCode: 200,
-                    httpVersion: nil,
-                    headerFields: nil
-                )
-            )
+            guard let response = HTTPURLResponse(
+                url: url,
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: nil
+            ) else {
+                throw URLError(.badServerResponse)
+            }
 
-            return (data, response)
+            return (response, data)
         }
+
+        let api = TodosAPI(
+            session: session
+        )
 
         let todos = try await api.fetchTodos()
 
@@ -53,20 +59,26 @@ struct TodosAPITests {
     
     @Test
     func fetchTodosThrowsBadServerResponseForHTTP500() async throws {
-        let api = TodosAPI { request in
-            let url = try #require(request.url)
+        let session = URLProtocolStub.makeSession { request in
+            guard let url = request.url else {
+                throw URLError(.badURL)
+            }
 
-            let response = try #require(
-                HTTPURLResponse(
-                    url: url,
-                    statusCode: 500,
-                    httpVersion: nil,
-                    headerFields: nil
-                )
-            )
+            guard let response = HTTPURLResponse(
+                url: url,
+                statusCode: 500,
+                httpVersion: nil,
+                headerFields: nil
+            ) else {
+                throw URLError(.badServerResponse)
+            }
 
-            return (Data(), response)
+            return (response, Data())
         }
+
+        let api = TodosAPI(
+            session: session
+        )
 
         do {
             _ = try await api.fetchTodos()
@@ -94,21 +106,27 @@ struct TodosAPITests {
 
         let data = try #require(invalidJSON.data(using: .utf8))
 
-        let api = TodosAPI { request in
-            let url = try #require(request.url)
+        let session = URLProtocolStub.makeSession { request in
+            guard let url = request.url else {
+                throw URLError(.badURL)
+            }
 
-            let response = try #require(
-                HTTPURLResponse(
-                    url: url,
-                    statusCode: 200,
-                    httpVersion: nil,
-                    headerFields: nil
-                )
-            )
+            guard let response = HTTPURLResponse(
+                url: url,
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: nil
+            ) else {
+                throw URLError(.badServerResponse)
+            }
 
-            return (data, response)
+            return (response, data)
         }
 
+        let api = TodosAPI(
+            session: session
+        )
+        
         do {
             _ = try await api.fetchTodos()
             Issue.record("Expected fetchTodos() to throw DecodingError")
