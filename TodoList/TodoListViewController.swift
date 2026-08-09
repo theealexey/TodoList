@@ -544,6 +544,46 @@ extension TodoListViewController: UITableViewDelegate {
 
     func tableView(
         _ tableView: UITableView,
+        trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath
+    ) -> UISwipeActionsConfiguration? {
+        guard items.indices.contains(indexPath.row) else {
+            return nil
+        }
+
+        let item = items[indexPath.row]
+
+        guard mutationTasks[item.id] == nil else {
+            return nil
+        }
+
+        let deleteAction = UIContextualAction(
+            style: .destructive,
+            title: Localization.deleteTitle
+        ) { [weak self] _, _, completionHandler in
+            guard let self else {
+                completionHandler(false)
+                return
+            }
+
+            delete(item)
+            completionHandler(true)
+        }
+
+        deleteAction.image = UIImage(
+            systemName: "trash"
+        )
+
+        let configuration = UISwipeActionsConfiguration(
+            actions: [deleteAction]
+        )
+
+        configuration.performsFirstActionWithFullSwipe = false
+
+        return configuration
+    }
+    
+    func tableView(
+        _ tableView: UITableView,
         shouldHighlightRowAt indexPath: IndexPath
     ) -> Bool {
         guard items.indices.contains(indexPath.row) else {
