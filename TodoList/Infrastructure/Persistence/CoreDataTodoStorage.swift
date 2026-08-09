@@ -36,23 +36,31 @@ final class CoreDataTodoStorage {
         try await withCheckedThrowingContinuation {
             (continuation: CheckedContinuation<Void, Error>) in
 
-            container.performBackgroundTask { context in
-                do {
-                    let storedTodo = try Self.makeStoredTodo(
-                        in: context
-                    )
+            operationQueue.addOperation { [container] in
+                let context = container.newBackgroundContext()
 
-                    storedTodo.id = item.id
-                    storedTodo.remoteID = Self.localRemoteID
-                    storedTodo.title = item.title
-                    storedTodo.details = item.details
-                    storedTodo.createdAt = item.createdAt
-                    storedTodo.isCompleted = item.status == .completed
+                context.performAndWait {
+                    do {
+                        let storedTodo = try Self.makeStoredTodo(
+                            in: context
+                        )
 
-                    try context.save()
-                    continuation.resume()
-                } catch {
-                    continuation.resume(throwing: error)
+                        storedTodo.id = item.id
+                        storedTodo.remoteID = Self.localRemoteID
+                        storedTodo.title = item.title
+                        storedTodo.details = item.details
+                        storedTodo.createdAt = item.createdAt
+                        storedTodo.isCompleted =
+                            item.status == .completed
+
+                        try context.save()
+
+                        continuation.resume()
+                    } catch {
+                        continuation.resume(
+                            throwing: error
+                        )
+                    }
                 }
             }
         }
