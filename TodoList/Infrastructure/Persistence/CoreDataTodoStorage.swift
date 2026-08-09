@@ -118,26 +118,40 @@ final class CoreDataTodoStorage {
         try await withCheckedThrowingContinuation {
             (continuation: CheckedContinuation<Void, Error>) in
 
-            container.performBackgroundTask { context in
-                do {
-                    let request = NSFetchRequest<StoredTodo>(
-                        entityName: Self.entityName
-                    )
-                    request.predicate = NSPredicate(
-                        format: "id == %@",
-                        id as NSUUID
-                    )
-                    request.fetchLimit = 1
+            operationQueue.addOperation { [container] in
+                let context = container.newBackgroundContext()
 
-                    guard let storedTodo = try context.fetch(request).first else {
-                        throw CoreDataTodoStorageError.todoNotFound(id: id)
+                context.performAndWait {
+                    do {
+                        let request = NSFetchRequest<StoredTodo>(
+                            entityName: Self.entityName
+                        )
+
+                        request.predicate = NSPredicate(
+                            format: "id == %@",
+                            id as NSUUID
+                        )
+
+                        request.fetchLimit = 1
+
+                        guard let storedTodo = try context
+                            .fetch(request)
+                            .first
+                        else {
+                            throw CoreDataTodoStorageError.todoNotFound(
+                                id: id
+                            )
+                        }
+
+                        context.delete(storedTodo)
+                        try context.save()
+
+                        continuation.resume()
+                    } catch {
+                        continuation.resume(
+                            throwing: error
+                        )
                     }
-
-                    context.delete(storedTodo)
-                    try context.save()
-                    continuation.resume()
-                } catch {
-                    continuation.resume(throwing: error)
                 }
             }
         }
