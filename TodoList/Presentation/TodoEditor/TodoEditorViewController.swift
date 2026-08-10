@@ -71,8 +71,8 @@ final class TodoEditorViewController: UIViewController {
 
     private let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
-        formatter.locale = .current
-        formatter.dateFormat = "dd/MM/yy"
+        formatter.locale = .autoupdatingCurrent
+        formatter.setLocalizedDateFormatFromTemplate("ddMMyy")
         return formatter
     }()
 
