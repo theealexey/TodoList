@@ -1,9 +1,10 @@
 import UIKit
-import UIKit
 
 final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     var window: UIWindow?
+    
+    private let appContainer = AppContainer()
 
     func scene(
         _ scene: UIScene,
@@ -14,9 +15,10 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             return
         }
 
-        let rootViewController = ViewController()
+        let assembly = TodoListAssembly(container: appContainer)
+        let todoListViewController = assembly.makeViewController()
         let navigationController = UINavigationController(
-            rootViewController: rootViewController
+            rootViewController: todoListViewController
         )
 
         let window = UIWindow(windowScene: windowScene)

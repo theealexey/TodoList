@@ -1,0 +1,171 @@
+import Foundation
+
+@MainActor
+final class TodoListViewModel {
+
+    enum State: Equatable {
+        case idle
+        case loading
+        case empty
+        case noResults
+        case content([TodoItem])
+        case failure
+    }
+
+    enum ActionError: Equatable {
+        case statusUpdateFailed
+        case deleteFailed
+        case operationInProgress
+    }
+
+    private let loadTodosUseCase: LoadTodosUseCase
+    private let toggleTodoStatusUseCase: ToggleTodoStatusUseCase
+    private let deleteTodoUseCase: DeleteTodoUseCase
+    private let searchQueue: OperationQueue
+
+    private var allItems: [TodoItem] = []
+    private var searchQuery = ""
+    private var processingItemIDs: Set<UUID> = []
+    private var searchRevision = 0
+
+    private(set) var state: State = .idle {
+        didSet {
+            onStateChange?(state)
+        }
+    }
+
+    var onStateChange: ((State) -> Void)?
+    var onActionError: ((ActionError) -> Void)?
+
+    init(
+        loadTodosUseCase: LoadTodosUseCase,
+        toggleTodoStatusUseCase: ToggleTodoStatusUseCase,
+        deleteTodoUseCase: DeleteTodoUseCase,
+        searchQueue: OperationQueue = OperationQueue()
+    ) {
+        self.loadTodosUseCase = loadTodosUseCase
+        self.toggleTodoStatusUseCase = toggleTodoStatusUseCase
+        self.deleteTodoUseCase = deleteTodoUseCase
+        self.searchQueue = searchQueue
+
+        searchQueue.maxConcurrentOperationCount = 1
+        searchQueue.qualityOfService = .userInitiated
+    }
+    
+    func load() async {
+        state = .loading
+
+        do {
+            allItems = try await loadTodosUseCase.execute()
+            applySearch()
+        } catch {
+            allItems = []
+            state = .failure
+        }
+    }
+
+    func updateSearchQuery(_ query: String) {
+        searchQuery = query.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        )
+
+        applySearch()
+    }
+
+    func toggleStatus(for item: TodoItem) async {
+        guard processingItemIDs.insert(item.id).inserted else {
+            onActionError?(.operationInProgress)
+            return
+        }
+
+        defer {
+            processingItemIDs.remove(item.id)
+        }
+
+        do {
+            let updatedItem =
+                try await toggleTodoStatusUseCase.execute(
+                    item: item
+                )
+
+            guard let index = allItems.firstIndex(
+                where: { $0.id == updatedItem.id }
+            ) else {
+                return
+            }
+
+            allItems[index] = updatedItem
+            applySearch()
+        } catch {
+            onActionError?(.statusUpdateFailed)
+        }
+    }
+
+    func delete(_ item: TodoItem) async {
+        guard processingItemIDs.insert(item.id).inserted else {
+            onActionError?(.operationInProgress)
+            return
+        }
+
+        defer {
+            processingItemIDs.remove(item.id)
+        }
+
+        do {
+            try await deleteTodoUseCase.execute(id: item.id)
+
+            allItems.removeAll {
+                $0.id == item.id
+            }
+
+            applySearch()
+        } catch {
+            onActionError?(.deleteFailed)
+        }
+    }
+
+    private func applySearch() {
+        searchRevision += 1
+        let revision = searchRevision
+
+        searchQueue.cancelAllOperations()
+
+        guard !allItems.isEmpty else {
+            state = .empty
+            return
+        }
+
+        guard !searchQuery.isEmpty else {
+            state = .content(allItems)
+            return
+        }
+
+        let items = allItems
+        let query = searchQuery
+
+        searchQueue.addOperation {
+            let filteredItems = items.filter { item in
+                item.title.localizedCaseInsensitiveContains(
+                    query
+                )
+                || item.details.localizedCaseInsensitiveContains(
+                    query
+                )
+            }
+
+            DispatchQueue.main.async { [weak self] in
+                guard let self else {
+                    return
+                }
+
+                guard self.searchRevision == revision else {
+                    return
+                }
+
+                self.state = filteredItems.isEmpty
+                    ? .noResults
+                    : .content(filteredItems)
+            }
+        }
+    }
+}
