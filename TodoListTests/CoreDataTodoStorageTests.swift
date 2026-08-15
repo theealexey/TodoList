@@ -170,6 +170,23 @@ struct CoreDataTodoStorageTests {
         )
     }
 
+    @Test(.timeLimit(.minutes(1)))
+    func alreadyCancelledFetchThrowsCancellationError() async throws {
+        let (_, storage) = try await makeStorage()
+
+        let result = await Task {
+            withUnsafeCurrentTask { task in
+                task?.cancel()
+            }
+
+            return try await storage.fetchAll()
+        }.result
+
+        #expect(throws: CancellationError.self) {
+            try result.get()
+        }
+    }
+
     @Test
     func createImportedTodoStoresRemoteData() async throws {
         let (stack, storage) = try await makeStorage()
@@ -281,6 +298,115 @@ struct CoreDataTodoStorageTests {
                     && $0.status == .completed
             }
         )
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func concurrentImportsDeduplicateOverlappingRemoteIDs() async throws {
+        let (stack, storage) = try await makeStorage()
+
+        let importedAt = Date(
+            timeIntervalSince1970: 1_700_000_000
+        )
+
+        let firstRecords = [
+            TodoImportRecord(
+                remoteID: 42,
+                title: "First shared task",
+                isCompleted: false
+            ),
+            TodoImportRecord(
+                remoteID: 43,
+                title: "First unique task",
+                isCompleted: false
+            )
+        ]
+
+        let secondRecords = [
+            TodoImportRecord(
+                remoteID: 42,
+                title: "Second shared task",
+                isCompleted: true
+            ),
+            TodoImportRecord(
+                remoteID: 44,
+                title: "Second unique task",
+                isCompleted: true
+            )
+        ]
+
+        async let firstImport: Void = storage.importTodos(
+            firstRecords,
+            importedAt: importedAt
+        )
+
+        async let secondImport: Void = storage.importTodos(
+            secondRecords,
+            importedAt: importedAt
+        )
+
+        _ = try await (firstImport, secondImport)
+
+        let remoteIDs = try await snapshots(in: stack)
+            .map(\.remoteID)
+            .sorted()
+
+        #expect(remoteIDs == [42, 43, 44])
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func concurrentDistinctMutationsPreserveCommittedData() async throws {
+        let (_, storage) = try await makeStorage()
+
+        let itemToUpdate = TodoItem(
+            id: UUID(),
+            title: "Original task",
+            details: "Original details",
+            createdAt: Date(
+                timeIntervalSince1970: 1_700_000_000
+            ),
+            status: .pending
+        )
+
+        let itemToDelete = TodoItem(
+            id: UUID(),
+            title: "Delete task",
+            details: "",
+            createdAt: Date(
+                timeIntervalSince1970: 1_710_000_000
+            ),
+            status: .pending
+        )
+
+        try await storage.create(itemToUpdate)
+        try await storage.create(itemToDelete)
+
+        let updatedItem = TodoItem(
+            id: itemToUpdate.id,
+            title: "Updated task",
+            details: "Updated details",
+            createdAt: itemToUpdate.createdAt,
+            status: .completed
+        )
+
+        let createdItem = TodoItem(
+            id: UUID(),
+            title: "Concurrent create",
+            details: "",
+            createdAt: Date(
+                timeIntervalSince1970: 1_720_000_000
+            ),
+            status: .pending
+        )
+
+        async let create: Void = storage.create(createdItem)
+        async let update: Void = storage.update(updatedItem)
+        async let delete: Void = storage.delete(id: itemToDelete.id)
+
+        _ = try await (create, update, delete)
+
+        let items = try await storage.fetchAll()
+
+        #expect(items == [createdItem, updatedItem])
     }
 
     @Test
