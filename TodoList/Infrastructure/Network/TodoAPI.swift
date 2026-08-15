@@ -3,16 +3,11 @@ import Foundation
 struct TodosAPI {
 
     private let session: URLSession
-    private let operationQueue: OperationQueue
-    
+
     init(
-        session: URLSession = .shared,
-        operationQueue: OperationQueue = OperationQueue()
+        session: URLSession = .shared
     ) {
         self.session = session
-        self.operationQueue = operationQueue
-
-        operationQueue.qualityOfService = .userInitiated
     }
 
     func fetchTodos() async throws -> [TodoDTO] {
@@ -27,21 +22,28 @@ struct TodosAPI {
             timeoutInterval: 15
         )
 
-        return try await withCheckedThrowingContinuation {
-            (
-                continuation:
-                    CheckedContinuation<[TodoDTO], Error>
-            ) in
-            
-            let operation = TodosFetchOperation(
-                request: request,
-                session: session
-            ) { result in
-                continuation.resume(with: result)
-            }
-            
-            operationQueue.addOperation(operation)
+        let data: Data
+        let response: URLResponse
+
+        do {
+            (data, response) = try await session.data(
+                for: request
+            )
+        } catch let error as URLError
+            where error.code == .cancelled {
+            throw CancellationError()
         }
 
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200..<300).contains(httpResponse.statusCode) else {
+            throw URLError(.badServerResponse)
+        }
+
+        let responseDTO = try JSONDecoder().decode(
+            TodosResponseDTO.self,
+            from: data
+        )
+
+        return responseDTO.todos
     }
 }

@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 
 final class URLProtocolStub: URLProtocol {
 
@@ -11,28 +12,41 @@ final class URLProtocolStub: URLProtocol {
             "X-URLProtocolStub-Handler-ID"
     }
 
-    private final class Registry: @unchecked Sendable {
+    private struct Behavior: Sendable {
+        let handler: Handler?
+        let onStart: @Sendable (URLRequest) -> Void
+        let onStop: @Sendable () -> Void
+    }
 
-        private let lock = NSLock()
-        private var handlers: [String: Handler] = [:]
+    private final class Registry: Sendable {
+
+        private let behaviors = Mutex([String: Behavior]())
 
         func register(
-            _ handler: @escaping Handler
+            _ behavior: Behavior
         ) -> String {
             let id = UUID().uuidString
 
-            lock.withLock {
-                handlers[id] = handler
+            behaviors.withLock {
+                $0[id] = behavior
             }
 
             return id
         }
 
-        func handler(
+        func behavior(
             for id: String
-        ) -> Handler? {
-            lock.withLock {
-                handlers[id]
+        ) -> Behavior? {
+            behaviors.withLock {
+                $0[id]
+            }
+        }
+
+        func removeBehavior(
+            for id: String
+        ) {
+            behaviors.withLock {
+                $0[id] = nil
             }
         }
     }
@@ -42,7 +56,45 @@ final class URLProtocolStub: URLProtocol {
     static func makeSession(
         handler: @escaping Handler
     ) -> URLSession {
-        let handlerID = registry.register(handler)
+        makeSession(
+            behavior: Behavior(
+                handler: handler,
+                onStart: { _ in },
+                onStop: {}
+            )
+        )
+    }
+
+    static func makeControlledSession(
+        onStart: @escaping @Sendable (URLRequest) -> Void,
+        onStop: @escaping @Sendable () -> Void
+    ) -> URLSession {
+        makeSession(
+            behavior: Behavior(
+                handler: nil,
+                onStart: onStart,
+                onStop: onStop
+            )
+        )
+    }
+
+    static func invalidate(
+        _ session: URLSession
+    ) {
+        let handlerID = session.configuration
+            .httpAdditionalHeaders?[Header.handlerID] as? String
+
+        session.invalidateAndCancel()
+
+        if let handlerID {
+            registry.removeBehavior(for: handlerID)
+        }
+    }
+
+    private static func makeSession(
+        behavior: Behavior
+    ) -> URLSession {
+        let handlerID = registry.register(behavior)
 
         let configuration =
             URLSessionConfiguration.ephemeral
@@ -77,7 +129,7 @@ final class URLProtocolStub: URLProtocol {
             let handlerID = request.value(
                 forHTTPHeaderField: Header.handlerID
             ),
-            let handler = Self.registry.handler(
+            let behavior = Self.registry.behavior(
                 for: handlerID
             )
         else {
@@ -85,6 +137,12 @@ final class URLProtocolStub: URLProtocol {
                 self,
                 didFailWithError: URLError(.unknown)
             )
+            return
+        }
+
+        behavior.onStart(request)
+
+        guard let handler = behavior.handler else {
             return
         }
 
@@ -111,5 +169,18 @@ final class URLProtocolStub: URLProtocol {
         }
     }
 
-    override func stopLoading() {}
+    override func stopLoading() {
+        guard
+            let handlerID = request.value(
+                forHTTPHeaderField: Header.handlerID
+            ),
+            let behavior = Self.registry.behavior(
+                for: handlerID
+            )
+        else {
+            return
+        }
+
+        behavior.onStop()
+    }
 }
