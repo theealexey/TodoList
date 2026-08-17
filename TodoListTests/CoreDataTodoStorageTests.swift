@@ -188,18 +188,22 @@ struct CoreDataTodoStorageTests {
     }
 
     @Test
-    func createImportedTodoStoresRemoteData() async throws {
+    func importTodosStoresRemoteData() async throws {
         let (stack, storage) = try await makeStorage()
 
         let importedAt = Date(
             timeIntervalSince1970: 1_700_000_000
         )
 
-        try await storage.createImportedTodo(
-            remoteID: 42,
-            title: "Imported task",
-            importedAt: importedAt,
-            isCompleted: true
+        try await storage.importTodos(
+            [
+                TodoImportRecord(
+                    remoteID: 42,
+                    title: "Imported task",
+                    isCompleted: true
+                )
+            ],
+            importedAt: importedAt
         )
 
         let storedSnapshots = try await snapshots(
@@ -220,7 +224,7 @@ struct CoreDataTodoStorageTests {
     }
 
     @Test
-    func createImportedTodoDoesNotDuplicateExistingRemoteID()
+    func importTodosDoesNotDuplicateExistingRemoteID()
         async throws {
         let (_, storage) = try await makeStorage()
 
@@ -228,18 +232,26 @@ struct CoreDataTodoStorageTests {
             timeIntervalSince1970: 1_700_000_000
         )
 
-        try await storage.createImportedTodo(
-            remoteID: 42,
-            title: "Imported task",
-            importedAt: importedAt,
-            isCompleted: false
+        try await storage.importTodos(
+            [
+                TodoImportRecord(
+                    remoteID: 42,
+                    title: "Imported task",
+                    isCompleted: false
+                )
+            ],
+            importedAt: importedAt
         )
 
-        try await storage.createImportedTodo(
-            remoteID: 42,
-            title: "Changed remote title",
-            importedAt: importedAt,
-            isCompleted: true
+        try await storage.importTodos(
+            [
+                TodoImportRecord(
+                    remoteID: 42,
+                    title: "Changed remote title",
+                    isCompleted: true
+                )
+            ],
+            importedAt: importedAt
         )
 
         let items = try await storage.fetchAll()
@@ -462,7 +474,7 @@ struct CoreDataTodoStorageTests {
             Issue.record(
                 "Expected todoNotFound error"
             )
-        } catch let error as CoreDataTodoStorageError {
+        } catch let error as TodoStorageError {
             #expect(
                 error == .todoNotFound(id: missingID)
             )
@@ -507,7 +519,7 @@ struct CoreDataTodoStorageTests {
             Issue.record(
                 "Expected todoNotFound error"
             )
-        } catch let error as CoreDataTodoStorageError {
+        } catch let error as TodoStorageError {
             #expect(
                 error == .todoNotFound(id: missingID)
             )

@@ -18,9 +18,9 @@ final class TodoListViewModel {
         case operationInProgress
     }
 
-    private let loadTodosUseCase: LoadTodosUseCase
-    private let toggleTodoStatusUseCase: ToggleTodoStatusUseCase
-    private let deleteTodoUseCase: DeleteTodoUseCase
+    private let loadTodosUseCase: any LoadTodosUseCaseProtocol
+    private let toggleTodoStatusUseCase: any ToggleTodoStatusUseCaseProtocol
+    private let deleteTodoUseCase: any DeleteTodoUseCaseProtocol
     private let searchQueue: OperationQueue
 
     private var allItems: [TodoItem] = []
@@ -29,6 +29,7 @@ final class TodoListViewModel {
     private var currentSearchOperation: BlockOperation?
     private var currentLoadID: UUID?
     private var stateBeforeLoading: State?
+    private var contentRevision = 0
 
     private(set) var state: State = .idle {
         didSet {
@@ -40,9 +41,9 @@ final class TodoListViewModel {
     var onActionError: ((ActionError) -> Void)?
 
     init(
-        loadTodosUseCase: LoadTodosUseCase,
-        toggleTodoStatusUseCase: ToggleTodoStatusUseCase,
-        deleteTodoUseCase: DeleteTodoUseCase
+        loadTodosUseCase: any LoadTodosUseCaseProtocol,
+        toggleTodoStatusUseCase: any ToggleTodoStatusUseCaseProtocol,
+        deleteTodoUseCase: any DeleteTodoUseCaseProtocol
     ) {
         self.loadTodosUseCase = loadTodosUseCase
         self.toggleTodoStatusUseCase = toggleTodoStatusUseCase
@@ -58,6 +59,7 @@ final class TodoListViewModel {
         cancelCurrentSearch()
 
         let loadID = UUID()
+        let startingContentRevision = contentRevision
 
         if currentLoadID == nil {
             stateBeforeLoading = state
@@ -74,22 +76,42 @@ final class TodoListViewModel {
             }
 
             guard !Task.isCancelled else {
-                restoreStateAfterCancelledLoad(loadID: loadID)
+                restoreStateAfterCancelledLoad(
+                    loadID: loadID,
+                    startingContentRevision: startingContentRevision
+                )
+                return
+            }
+
+            currentLoadID = nil
+
+            guard contentRevision == startingContentRevision else {
+                stateBeforeLoading = nil
+                applySearch()
                 return
             }
 
             allItems = loadedItems
-            currentLoadID = nil
             stateBeforeLoading = nil
             applySearch()
         } catch is CancellationError {
-            restoreStateAfterCancelledLoad(loadID: loadID)
+            restoreStateAfterCancelledLoad(
+                loadID: loadID,
+                startingContentRevision: startingContentRevision
+            )
         } catch {
             guard currentLoadID == loadID else {
                 return
             }
 
             currentLoadID = nil
+
+            guard contentRevision == startingContentRevision else {
+                stateBeforeLoading = nil
+                applySearch()
+                return
+            }
+
             stateBeforeLoading = nil
             allItems = []
             state = .failure
@@ -127,7 +149,10 @@ final class TodoListViewModel {
             }
 
             allItems[index] = updatedItem
+            contentRevision += 1
             applySearch()
+        } catch is CancellationError {
+            return
         } catch {
             onActionError?(.statusUpdateFailed)
         }
@@ -150,7 +175,10 @@ final class TodoListViewModel {
                 $0.id == item.id
             }
 
+            contentRevision += 1
             applySearch()
+        } catch is CancellationError {
+            return
         } catch {
             onActionError?(.deleteFailed)
         }
@@ -235,12 +263,21 @@ final class TodoListViewModel {
     }
 
 
-    private func restoreStateAfterCancelledLoad(loadID: UUID) {
+    private func restoreStateAfterCancelledLoad(
+        loadID: UUID,
+        startingContentRevision: Int
+    ) {
         guard currentLoadID == loadID else {
             return
         }
 
         currentLoadID = nil
+
+        guard contentRevision == startingContentRevision else {
+            stateBeforeLoading = nil
+            applySearch()
+            return
+        }
 
         let restoredState = stateBeforeLoading ?? .idle
         stateBeforeLoading = nil

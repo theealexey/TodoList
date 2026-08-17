@@ -4,7 +4,7 @@ import Foundation
 final class TodoEditorViewModel {
 
     enum Mode: Equatable {
-        case create(createdAt: Date)
+        case create(NewTodoDraft)
         case edit(TodoItem)
     }
 
@@ -22,22 +22,11 @@ final class TodoEditorViewModel {
         case failure
     }
 
-    typealias Create = (
-        _ title: String,
-        _ details: String
-    ) async throws -> TodoItem
-
-    typealias Update = (
-        _ item: TodoItem,
-        _ title: String,
-        _ details: String
-    ) async throws -> TodoItem
-
     let mode: Mode
     let initialContent: InitialContent
 
-    private let create: Create
-    private let update: Update
+    private let createTodoUseCase: any CreateTodoUseCaseProtocol
+    private let updateTodoUseCase: any UpdateTodoUseCaseProtocol
 
     private(set) var state: State = .idle {
         didSet {
@@ -49,19 +38,19 @@ final class TodoEditorViewModel {
 
     init(
         mode: Mode,
-        create: @escaping Create,
-        update: @escaping Update
+        createTodoUseCase: any CreateTodoUseCaseProtocol,
+        updateTodoUseCase: any UpdateTodoUseCaseProtocol
     ) {
         self.mode = mode
-        self.create = create
-        self.update = update
+        self.createTodoUseCase = createTodoUseCase
+        self.updateTodoUseCase = updateTodoUseCase
 
         switch mode {
-        case let .create(createdAt):
+        case let .create(draft):
             initialContent = InitialContent(
                 title: "",
                 details: "",
-                createdAt: createdAt
+                createdAt: draft.createdAt
             )
 
         case let .edit(item):
@@ -70,6 +59,29 @@ final class TodoEditorViewModel {
                 details: item.details,
                 createdAt: item.createdAt
             )
+        }
+    }
+
+
+    func hasChanges(
+        title: String,
+        details: String
+    ) -> Bool {
+        let normalizedTitle = title.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        )
+        let normalizedDetails = details.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        )
+
+        switch mode {
+        case .create:
+            return !normalizedTitle.isEmpty
+                || !normalizedDetails.isEmpty
+
+        case .edit:
+            return normalizedTitle != initialContent.title
+                || normalizedDetails != initialContent.details
         }
     }
 
@@ -87,17 +99,18 @@ final class TodoEditorViewModel {
             let savedItem: TodoItem
 
             switch mode {
-            case .create:
-                savedItem = try await create(
-                    title,
-                    details
+            case let .create(draft):
+                savedItem = try await createTodoUseCase.execute(
+                    draft: draft,
+                    title: title,
+                    details: details
                 )
 
             case let .edit(originalItem):
-                savedItem = try await update(
-                    originalItem,
-                    title,
-                    details
+                savedItem = try await updateTodoUseCase.execute(
+                    item: originalItem,
+                    title: title,
+                    details: details
                 )
             }
 

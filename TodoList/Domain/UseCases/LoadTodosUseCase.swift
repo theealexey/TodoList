@@ -1,16 +1,16 @@
-import Foundation
+protocol LoadTodosUseCaseProtocol: Sendable {
+    func execute() async throws -> [TodoItem]
+}
 
-struct LoadTodosUseCase {
+struct LoadTodosUseCase<Repository: TodoRepository>: LoadTodosUseCaseProtocol {
 
-    typealias Load = () async throws -> [TodoItem]
+    private let repository: Repository
 
-    private let load: Load
-
-    init(load: @escaping Load) {
-        self.load = load
+    init(repository: Repository) {
+        self.repository = repository
     }
 
     func execute() async throws -> [TodoItem] {
-        try await load()
+        try await repository.loadTodos()
     }
 }

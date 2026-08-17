@@ -6,7 +6,7 @@ import Testing
 struct CoreDataStackTests {
 
     @Test
-    func productionStoreLoadsAsynchronously() {
+    func productionStoreIsConfiguredForAsynchronousLoading() {
         let stack = CoreDataStack()
 
         let descriptions = stack.container.persistentStoreDescriptions
@@ -109,5 +109,4 @@ struct CoreDataStackTests {
 
         #expect(!identifier.isEmpty)
     }
-
 }

@@ -1,26 +1,26 @@
-import Foundation
-
 @MainActor
-final class TodoEditorAssembly {
+struct TodoEditorAssembly<
+    CreateUseCase: CreateTodoUseCaseProtocol,
+    UpdateUseCase: UpdateTodoUseCaseProtocol
+> {
 
-    private let create: TodoEditorViewModel.Create
-    private let update: TodoEditorViewModel.Update
+    private let createTodoUseCase: CreateUseCase
+    private let updateTodoUseCase: UpdateUseCase
 
     init(
-        create: @escaping TodoEditorViewModel.Create,
-        update: @escaping TodoEditorViewModel.Update
+        createTodoUseCase: CreateUseCase,
+        updateTodoUseCase: UpdateUseCase
     ) {
-        self.create = create
-        self.update = update
+        self.createTodoUseCase = createTodoUseCase
+        self.updateTodoUseCase = updateTodoUseCase
     }
 
     func makeCreateViewController(
-        createdAt: Date,
         onSaved: @escaping (TodoItem) -> Void
     ) -> TodoEditorViewController {
         makeViewController(
             mode: .create(
-                createdAt: createdAt
+                createTodoUseCase.makeDraft()
             ),
             onSaved: onSaved
         )
@@ -42,16 +42,14 @@ final class TodoEditorAssembly {
     ) -> TodoEditorViewController {
         let viewModel = TodoEditorViewModel(
             mode: mode,
-            create: create,
-            update: update
+            createTodoUseCase: createTodoUseCase,
+            updateTodoUseCase: updateTodoUseCase
         )
 
         let viewController = TodoEditorViewController(
             viewModel: viewModel
         )
-
         viewController.onSaved = onSaved
-
         return viewController
     }
 }

@@ -5,131 +5,99 @@ final class TodoListViewController: UIViewController {
 
     private enum Localization {
 
-        static let title = NSLocalizedString(
-            "todo_list.title",
-            tableName: nil,
-            bundle: .main,
-            value: "Tasks",
+        static let title = String(
+            localized: "todo_list.title",
+            defaultValue: "Tasks",
             comment: "Todo list screen title"
         )
 
-        static let searchPlaceholder = NSLocalizedString(
-            "todo_list.search.placeholder",
-            tableName: nil,
-            bundle: .main,
-            value: "Search",
+        static let searchPlaceholder = String(
+            localized: "todo_list.search.placeholder",
+            defaultValue: "Search",
             comment: "Todo list search placeholder"
         )
 
-        static let emptyMessage = NSLocalizedString(
-            "todo_list.empty.message",
-            tableName: nil,
-            bundle: .main,
-            value: "No tasks yet",
+        static let emptyMessage = String(
+            localized: "todo_list.empty.message",
+            defaultValue: "No tasks yet",
             comment: "Todo list empty state message"
         )
 
-        static let failureMessage = NSLocalizedString(
-            "todo_list.failure.message",
-            tableName: nil,
-            bundle: .main,
-            value: "Failed to load tasks",
+        static let failureMessage = String(
+            localized: "todo_list.failure.message",
+            defaultValue: "Failed to load tasks",
             comment: "Todo list loading failure message"
         )
 
-        static let retryTitle = NSLocalizedString(
-            "todo_list.retry.title",
-            tableName: nil,
-            bundle: .main,
-            value: "Retry",
+        static let retryTitle = String(
+            localized: "todo_list.retry.title",
+            defaultValue: "Retry",
             comment: "Todo list retry button title"
         )
 
-        static let noResultsMessage = NSLocalizedString(
-            "todo_list.search.no_results",
-            tableName: nil,
-            bundle: .main,
-            value: "Nothing found",
+        static let noResultsMessage = String(
+            localized: "todo_list.search.no_results",
+            defaultValue: "Nothing found",
             comment: "Todo list search empty result message"
         )
 
-        static let statusUpdateFailureMessage = NSLocalizedString(
-            "todo_list.status_update.failure",
-            tableName: nil,
-            bundle: .main,
-            value: "Failed to update task status",
+        static let statusUpdateFailureMessage = String(
+            localized: "todo_list.status_update.failure",
+            defaultValue: "Failed to update task status",
             comment: "Todo status update failure message"
         )
 
-        static let deleteFailureMessage = NSLocalizedString(
-            "todo_list.delete.failure",
-            tableName: nil,
-            bundle: .main,
-            value: "Failed to delete the task",
+        static let deleteFailureMessage = String(
+            localized: "todo_list.delete.failure",
+            defaultValue: "Failed to delete the task",
             comment: "Todo deletion failure message"
         )
 
-        static let alertOKTitle = NSLocalizedString(
-            "common.ok",
-            tableName: nil,
-            bundle: .main,
-            value: "OK",
+        static let alertOKTitle = String(
+            localized: "common.ok",
+            defaultValue: "OK",
             comment: "Alert confirmation button"
         )
 
-        static let shareTitle = NSLocalizedString(
-            "todo_list.context_menu.share",
-            tableName: nil,
-            bundle: .main,
-            value: "Share",
+        static let shareTitle = String(
+            localized: "todo_list.context_menu.share",
+            defaultValue: "Share",
             comment: "Share todo context menu action"
         )
 
-        static let deleteTitle = NSLocalizedString(
-            "todo_list.context_menu.delete",
-            tableName: nil,
-            bundle: .main,
-            value: "Delete",
+        static let deleteTitle = String(
+            localized: "todo_list.context_menu.delete",
+            defaultValue: "Delete",
             comment: "Delete todo context menu action"
         )
 
-        static let deleteConfirmationTitle = NSLocalizedString(
-            "todo_list.delete.confirmation.title",
-            tableName: nil,
-            bundle: .main,
-            value: "Delete task?",
+        static let deleteConfirmationTitle = String(
+            localized: "todo_list.delete.confirmation.title",
+            defaultValue: "Delete task?",
             comment: "Todo deletion confirmation title"
         )
 
-        static let deleteConfirmationMessage = NSLocalizedString(
-            "todo_list.delete.confirmation.message",
-            tableName: nil,
-            bundle: .main,
-            value: "This action can’t be undone.",
+        static let deleteConfirmationMessage = String(
+            localized: "todo_list.delete.confirmation.message",
+            defaultValue: "This action can’t be undone.",
             comment: "Todo deletion confirmation message"
         )
 
-        static let cancelTitle = NSLocalizedString(
-            "common.cancel",
-            tableName: nil,
-            bundle: .main,
-            value: "Cancel",
+        static let cancelTitle = String(
+            localized: "common.cancel",
+            defaultValue: "Cancel",
             comment: "Cancel button title"
         )
 
-        static let editTitle = NSLocalizedString(
-            "todo_list.context_menu.edit",
-            tableName: nil,
-            bundle: .main,
-            value: "Edit",
+        static let editTitle = String(
+            localized: "todo_list.context_menu.edit",
+            defaultValue: "Edit",
             comment: "Edit todo context menu action"
         )
 
-        static let taskCountFormat = NSLocalizedString(
-            "todo_list.task_count",
-            tableName: nil,
-            bundle: .main,
-            value: "%lld tasks",
+        static let taskCountFormat = String(
+            localized: "todo_list.task_count",
+            defaultValue: "%lld tasks",
             comment: "Number of visible todo items"
         )
     }

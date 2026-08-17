@@ -5,73 +5,54 @@ import Testing
 @Suite
 struct ToggleTodoStatusUseCaseTests {
 
-    private actor UpdateSpy {
+    private actor RepositorySpy: TodoRepository {
+        private var updatedItems: [TodoItem] = []
 
-        private var receivedItems: [TodoItem] = []
+        func loadTodos() async throws -> [TodoItem] { [] }
+        func create(_ item: TodoItem) async throws {}
 
-        func update(_ item: TodoItem) {
-            receivedItems.append(item)
+        func update(_ item: TodoItem) async throws {
+            updatedItems.append(item)
         }
 
+        func delete(id: UUID) async throws {}
+
         func items() -> [TodoItem] {
-            receivedItems
+            updatedItems
         }
     }
 
     @Test
     func executeChangesPendingTodoToCompleted() async throws {
-        let item = TodoItem(
-            id: UUID(),
-            title: "Buy milk",
-            details: "Two cartons",
-            createdAt: Date(
-                timeIntervalSince1970: 1_700_000_000
-            ),
-            status: .pending
-        )
+        let repository = RepositorySpy()
+        let useCase = ToggleTodoStatusUseCase(repository: repository)
+        let item = Self.makeItem(status: .pending)
 
-        let spy = UpdateSpy()
-
-        let useCase = ToggleTodoStatusUseCase(
-            update: { updatedItem in
-                await spy.update(updatedItem)
-            }
-        )
-
-        let updatedItem = try await useCase.execute(
-            item: item
-        )
-
-        let receivedItems = await spy.items()
+        let updatedItem = try await useCase.execute(item: item)
 
         #expect(updatedItem.status == .completed)
-        #expect(updatedItem.id == item.id)
-        #expect(updatedItem.title == item.title)
-        #expect(updatedItem.details == item.details)
-        #expect(updatedItem.createdAt == item.createdAt)
-        #expect(receivedItems == [updatedItem])
+        #expect(await repository.items() == [updatedItem])
     }
 
     @Test
     func executeChangesCompletedTodoToPending() async throws {
-        let item = TodoItem(
-            id: UUID(),
-            title: "Completed task",
-            details: "",
-            createdAt: Date(
-                timeIntervalSince1970: 1_700_000_000
-            ),
-            status: .completed
-        )
+        let repository = RepositorySpy()
+        let useCase = ToggleTodoStatusUseCase(repository: repository)
+        let item = Self.makeItem(status: .completed)
 
-        let useCase = ToggleTodoStatusUseCase(
-            update: { _ in }
-        )
-
-        let updatedItem = try await useCase.execute(
-            item: item
-        )
+        let updatedItem = try await useCase.execute(item: item)
 
         #expect(updatedItem.status == .pending)
+        #expect(await repository.items() == [updatedItem])
+    }
+
+    private static func makeItem(status: TodoStatus) -> TodoItem {
+        TodoItem(
+            id: UUID(),
+            title: "Task",
+            details: "Details",
+            createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+            status: status
+        )
     }
 }

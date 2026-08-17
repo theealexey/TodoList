@@ -1,6 +1,6 @@
 import Foundation
 
-struct InitialTodoImportStateStore: Sendable {
+struct InitialTodoImportStateStore: InitialTodoImportStateStoring {
 
     private static let defaultKey =
         "InitialTodoImporter.completedStoreIdentifier"
@@ -25,12 +25,6 @@ struct InitialTodoImportStateStore: Sendable {
     func markCompleted(for storeIdentifier: String) {
         UserDefaults.standard.set(
             storeIdentifier,
-            forKey: completedStoreIdentifierKey
-        )
-    }
-
-    func reset() {
-        UserDefaults.standard.removeObject(
             forKey: completedStoreIdentifierKey
         )
     }

@@ -4,19 +4,15 @@ import UIKit
 final class StartupViewController: UIViewController {
 
     private enum Localization {
-        static let failureMessage = NSLocalizedString(
-            "todo_list.failure.message",
-            tableName: nil,
-            bundle: .main,
-            value: "Failed to load tasks",
+        static let failureMessage = String(
+            localized: "todo_list.failure.message",
+            defaultValue: "Failed to load tasks",
             comment: "Startup loading failure message"
         )
 
-        static let retryTitle = NSLocalizedString(
-            "todo_list.retry.title",
-            tableName: nil,
-            bundle: .main,
-            value: "Retry",
+        static let retryTitle = String(
+            localized: "todo_list.retry.title",
+            defaultValue: "Retry",
             comment: "Startup retry button title"
         )
     }

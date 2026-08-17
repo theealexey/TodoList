@@ -1,18 +1,18 @@
 import Foundation
 
-actor InitialTodoImporter {
+actor InitialTodoImporter: InitialTodoImporting {
 
-    private let api: TodosAPI
-    private let storage: CoreDataTodoStorage
-    private let stateStore: InitialTodoImportStateStore
+    private let api: any TodosFetching
+    private let storage: any TodoImportStoring
+    private let stateStore: any InitialTodoImportStateStoring
     private let storeIdentifier: String
 
     private var inFlightTask: Task<Void, Error>?
 
     init(
-        api: TodosAPI,
-        storage: CoreDataTodoStorage,
-        stateStore: InitialTodoImportStateStore =
+        api: any TodosFetching,
+        storage: any TodoImportStoring,
+        stateStore: any InitialTodoImportStateStoring =
             InitialTodoImportStateStore(),
         storeIdentifier: String
     ) {

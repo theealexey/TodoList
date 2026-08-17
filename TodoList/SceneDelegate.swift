@@ -79,7 +79,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         )
 
         let assembly = TodoListAssembly(
-            container: appContainer
+            repository: appContainer.todoRepository
         )
 
         let todoListViewController = assembly.makeViewController()

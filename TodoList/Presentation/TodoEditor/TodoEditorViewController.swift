@@ -6,56 +6,44 @@ final class TodoEditorViewController: UIViewController {
     private enum Localization {
 
         static let backTitle =
-            NSLocalizedString(
-                "todo_editor.back",
-                tableName: nil,
-                bundle: .main,
-                value: "Back",
+            String(
+                localized: "todo_editor.back",
+                defaultValue: "Back",
                 comment: "Todo editor back button title"
             )
 
         static let titlePlaceholder =
-            NSLocalizedString(
-                "todo_editor.title.placeholder",
-                tableName: nil,
-                bundle: .main,
-                value: "Title",
+            String(
+                localized: "todo_editor.title.placeholder",
+                defaultValue: "Title",
                 comment: "Todo editor title placeholder"
             )
 
         static let detailsPlaceholder =
-            NSLocalizedString(
-                "todo_editor.details.placeholder",
-                tableName: nil,
-                bundle: .main,
-                value: "Description",
+            String(
+                localized: "todo_editor.details.placeholder",
+                defaultValue: "Description",
                 comment: "Todo editor details placeholder"
             )
 
         static let emptyTitleMessage =
-            NSLocalizedString(
-                "todo_editor.validation.empty_title",
-                tableName: nil,
-                bundle: .main,
-                value: "Enter a task title",
+            String(
+                localized: "todo_editor.validation.empty_title",
+                defaultValue: "Enter a task title",
                 comment: "Todo editor empty title validation message"
             )
 
         static let saveFailureMessage =
-            NSLocalizedString(
-                "todo_editor.save.failure",
-                tableName: nil,
-                bundle: .main,
-                value: "Failed to save the task",
+            String(
+                localized: "todo_editor.save.failure",
+                defaultValue: "Failed to save the task",
                 comment: "Todo editor save failure message"
             )
 
         static let alertOKTitle =
-            NSLocalizedString(
-                "common.ok",
-                tableName: nil,
-                bundle: .main,
-                value: "OK",
+            String(
+                localized: "common.ok",
+                defaultValue: "OK",
                 comment: "Alert confirmation button"
             )
     }
@@ -230,7 +218,7 @@ final class TodoEditorViewController: UIViewController {
         let title = editorView.titleText
         let details = editorView.detailsText
 
-        guard shouldSave(
+        guard viewModel.hasChanges(
             title: title,
             details: details
         ) else {
@@ -251,35 +239,6 @@ final class TodoEditorViewController: UIViewController {
             )
 
             self?.saveTask = nil
-        }
-    }
-
-    private func shouldSave(
-        title: String,
-        details: String
-    ) -> Bool {
-        let initialContent = viewModel.initialContent
-
-        if title == initialContent.title,
-           details == initialContent.details {
-            return false
-        }
-
-        switch viewModel.mode {
-        case .create:
-            let normalizedTitle = title.trimmingCharacters(
-                in: .whitespacesAndNewlines
-            )
-
-            let normalizedDetails = details.trimmingCharacters(
-                in: .whitespacesAndNewlines
-            )
-
-            return !normalizedTitle.isEmpty
-                || !normalizedDetails.isEmpty
-
-        case .edit:
-            return true
         }
     }
 

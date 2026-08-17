@@ -15,11 +15,9 @@ final class TodoListCell: UITableViewCell {
     var onStatusToggle: (() -> Void)?
 
     private enum Localization {
-        static let statusToggleAccessibilityLabel = NSLocalizedString(
-            "todo_list.status_button.accessibility_label",
-            tableName: nil,
-            bundle: .main,
-            value: "Change task status",
+        static let statusToggleAccessibilityLabel = String(
+            localized: "todo_list.status_button.accessibility_label",
+            defaultValue: "Change task status",
             comment: "Accessibility label for the button that toggles todo completion status"
         )
     }
