@@ -320,6 +320,66 @@ struct TodoListViewModelTests {
     }
     
     @Test
+    func rapidSearchUpdatesPublishOnlyLatestResult() async {
+        let firstItem = TodoItem(
+            id: UUID(),
+            title: "Buy milk",
+            details: "Two cartons",
+            createdAt: Date(
+                timeIntervalSince1970: 1_700_000_000
+            ),
+            status: .pending
+        )
+
+        let secondItem = TodoItem(
+            id: UUID(),
+            title: "Clean apartment",
+            details: "Kitchen and bathroom",
+            createdAt: Date(
+                timeIntervalSince1970: 1_800_000_000
+            ),
+            status: .completed
+        )
+
+        let viewModel = makeViewModel(
+            items: [firstItem, secondItem]
+        )
+
+        await viewModel.load()
+
+        var receivedStates: [
+            TodoListViewModel.State
+        ] = []
+
+        await withCheckedContinuation { continuation in
+            var didResume = false
+
+            viewModel.onStateChange = { state in
+                receivedStates.append(state)
+
+                guard
+                    !didResume,
+                    state == .content([secondItem])
+                else {
+                    return
+                }
+
+                didResume = true
+                continuation.resume()
+            }
+
+            viewModel.updateSearchQuery("milk")
+            viewModel.updateSearchQuery("bathroom")
+        }
+
+        #expect(
+            receivedStates == [
+                .content([secondItem])
+            ]
+        )
+    }
+
+    @Test
     func clearingSearchRestoresAllLoadedItems() async {
         let items = [
             TodoItem(

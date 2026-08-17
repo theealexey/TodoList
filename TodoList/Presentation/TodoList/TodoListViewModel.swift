@@ -26,7 +26,7 @@ final class TodoListViewModel {
     private var allItems: [TodoItem] = []
     private var searchQuery = ""
     private var processingItemIDs: Set<UUID> = []
-    private var searchRevision = 0
+    private var currentSearchOperation: BlockOperation?
 
     private(set) var state: State = .idle {
         didSet {
@@ -40,19 +40,20 @@ final class TodoListViewModel {
     init(
         loadTodosUseCase: LoadTodosUseCase,
         toggleTodoStatusUseCase: ToggleTodoStatusUseCase,
-        deleteTodoUseCase: DeleteTodoUseCase,
-        searchQueue: OperationQueue = OperationQueue()
+        deleteTodoUseCase: DeleteTodoUseCase
     ) {
         self.loadTodosUseCase = loadTodosUseCase
         self.toggleTodoStatusUseCase = toggleTodoStatusUseCase
         self.deleteTodoUseCase = deleteTodoUseCase
-        self.searchQueue = searchQueue
 
+        let searchQueue = OperationQueue()
         searchQueue.maxConcurrentOperationCount = 1
         searchQueue.qualityOfService = .userInitiated
+        self.searchQueue = searchQueue
     }
     
     func load() async {
+        cancelCurrentSearch()
         state = .loading
 
         do {
@@ -125,10 +126,7 @@ final class TodoListViewModel {
     }
 
     private func applySearch() {
-        searchRevision += 1
-        let revision = searchRevision
-
-        searchQueue.cancelAllOperations()
+        cancelCurrentSearch()
 
         guard !allItems.isEmpty else {
             state = .empty
@@ -142,30 +140,67 @@ final class TodoListViewModel {
 
         let items = allItems
         let query = searchQuery
+        let operation = BlockOperation()
 
-        searchQueue.addOperation {
-            let filteredItems = items.filter { item in
-                item.title.localizedCaseInsensitiveContains(
-                    query
-                )
-                || item.details.localizedCaseInsensitiveContains(
-                    query
-                )
+        operation.addExecutionBlock {
+            [weak operation, weak self] in
+            guard let operation, !operation.isCancelled else {
+                return
             }
 
-            DispatchQueue.main.async { [weak self] in
-                guard let self else {
+            var filteredItems: [TodoItem] = []
+            filteredItems.reserveCapacity(items.count)
+
+            for item in items {
+                guard !operation.isCancelled else {
                     return
                 }
 
-                guard self.searchRevision == revision else {
+                let matchesTitle =
+                    item.title.localizedCaseInsensitiveContains(
+                        query
+                    )
+
+                let matchesDetails =
+                    item.details.localizedCaseInsensitiveContains(
+                        query
+                    )
+
+                if matchesTitle || matchesDetails {
+                    filteredItems.append(item)
+                }
+            }
+
+            guard !operation.isCancelled else {
+                return
+            }
+
+            let result = filteredItems
+
+            DispatchQueue.main.async {
+                [weak self, weak operation] in
+                guard
+                    let self,
+                    let operation,
+                    !operation.isCancelled,
+                    self.currentSearchOperation === operation
+                else {
                     return
                 }
 
-                self.state = filteredItems.isEmpty
+                self.currentSearchOperation = nil
+                self.state = result.isEmpty
                     ? .noResults
-                    : .content(filteredItems)
+                    : .content(result)
             }
         }
+
+        currentSearchOperation = operation
+        searchQueue.addOperation(operation)
+    }
+
+    private func cancelCurrentSearch() {
+        currentSearchOperation?.cancel()
+        currentSearchOperation = nil
     }
 }
