@@ -10,15 +10,6 @@ struct DefaultTodoRepositoryTests {
         let suiteName =
             "DefaultTodoRepositoryTests.\(UUID().uuidString)"
 
-        let defaults = try #require(
-            UserDefaults(suiteName: suiteName)
-        )
-
-        defer {
-            defaults.removePersistentDomain(
-                forName: suiteName
-            )
-        }
 
         let stack = CoreDataStack(inMemory: true)
         try await stack.load()
@@ -71,13 +62,18 @@ struct DefaultTodoRepositoryTests {
         )
 
         let stateStore = InitialTodoImportStateStore(
-            defaults: defaults
+            namespace: suiteName
         )
+
+        defer {
+            stateStore.reset()
+        }
 
         let importer = InitialTodoImporter(
             api: api,
             storage: storage,
-            stateStore: stateStore
+            stateStore: stateStore,
+            storeIdentifier: try stack.loadedStoreIdentifier()
         )
 
         let importedAt = Date(

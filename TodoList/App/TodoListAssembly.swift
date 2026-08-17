@@ -11,9 +11,7 @@ struct TodoListAssembly {
 
     func makeViewController() -> TodoListViewController {
         let loadTodosUseCase = LoadTodosUseCase {
-            try await container.prepare()
-
-            return try await container
+            try await container
                 .todoRepository
                 .loadTodos()
         }
@@ -21,8 +19,6 @@ struct TodoListAssembly {
         let toggleTodoStatusUseCase =
             ToggleTodoStatusUseCase(
                 update: { item in
-                    try await container.prepare()
-
                     try await container
                         .todoRepository
                         .update(item)
@@ -31,8 +27,6 @@ struct TodoListAssembly {
 
         let deleteTodoUseCase = DeleteTodoUseCase(
             delete: { id in
-                try await container.prepare()
-
                 try await container
                     .todoRepository
                     .delete(id: id)
@@ -65,8 +59,6 @@ struct TodoListAssembly {
         -> TodoEditorAssembly {
         let createTodoUseCase = CreateTodoUseCase(
             create: { item in
-                try await container.prepare()
-
                 try await container
                     .todoRepository
                     .create(item)
@@ -75,8 +67,6 @@ struct TodoListAssembly {
 
         let updateTodoUseCase = UpdateTodoUseCase(
             update: { item in
-                try await container.prepare()
-
                 try await container
                     .todoRepository
                     .update(item)
