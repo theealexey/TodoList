@@ -27,6 +27,8 @@ final class TodoListViewModel {
     private var searchQuery = ""
     private var processingItemIDs: Set<UUID> = []
     private var currentSearchOperation: BlockOperation?
+    private var currentLoadID: UUID?
+    private var stateBeforeLoading: State?
 
     private(set) var state: State = .idle {
         didSet {
@@ -54,12 +56,41 @@ final class TodoListViewModel {
     
     func load() async {
         cancelCurrentSearch()
+
+        let loadID = UUID()
+
+        if currentLoadID == nil {
+            stateBeforeLoading = state
+        }
+
+        currentLoadID = loadID
         state = .loading
 
         do {
-            allItems = try await loadTodosUseCase.execute()
+            let loadedItems = try await loadTodosUseCase.execute()
+
+            guard currentLoadID == loadID else {
+                return
+            }
+
+            guard !Task.isCancelled else {
+                restoreStateAfterCancelledLoad(loadID: loadID)
+                return
+            }
+
+            allItems = loadedItems
+            currentLoadID = nil
+            stateBeforeLoading = nil
             applySearch()
+        } catch is CancellationError {
+            restoreStateAfterCancelledLoad(loadID: loadID)
         } catch {
+            guard currentLoadID == loadID else {
+                return
+            }
+
+            currentLoadID = nil
+            stateBeforeLoading = nil
             allItems = []
             state = .failure
         }
@@ -126,6 +157,10 @@ final class TodoListViewModel {
     }
 
     private func applySearch() {
+        guard currentLoadID == nil else {
+            return
+        }
+
         cancelCurrentSearch()
 
         guard !allItems.isEmpty else {
@@ -197,6 +232,19 @@ final class TodoListViewModel {
 
         currentSearchOperation = operation
         searchQueue.addOperation(operation)
+    }
+
+
+    private func restoreStateAfterCancelledLoad(loadID: UUID) {
+        guard currentLoadID == loadID else {
+            return
+        }
+
+        currentLoadID = nil
+
+        let restoredState = stateBeforeLoading ?? .idle
+        stateBeforeLoading = nil
+        state = restoredState
     }
 
     private func cancelCurrentSearch() {

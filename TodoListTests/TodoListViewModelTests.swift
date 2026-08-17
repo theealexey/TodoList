@@ -79,6 +79,68 @@ private actor SuspendedMutation {
     }
 }
 
+private actor ControlledLoad {
+
+    private struct StartWaiter {
+        let expectedCount: Int
+        let continuation: CheckedContinuation<Void, Never>
+    }
+
+    private var invocationCount = 0
+    private var continuations: [
+        Int: CheckedContinuation<[TodoItem], Error>
+    ] = [:]
+    private var startWaiters: [StartWaiter] = []
+
+    func execute() async throws -> [TodoItem] {
+        invocationCount += 1
+        let invocation = invocationCount
+        resumeReadyStartWaiters()
+
+        return try await withCheckedThrowingContinuation { continuation in
+            continuations[invocation] = continuation
+        }
+    }
+
+    func waitForStartCount(_ expectedCount: Int) async {
+        guard invocationCount < expectedCount else {
+            return
+        }
+
+        await withCheckedContinuation { continuation in
+            startWaiters.append(
+                StartWaiter(
+                    expectedCount: expectedCount,
+                    continuation: continuation
+                )
+            )
+        }
+    }
+
+    func succeed(
+        invocation: Int,
+        with items: [TodoItem]
+    ) {
+        continuations.removeValue(
+            forKey: invocation
+        )?.resume(returning: items)
+    }
+
+    private func resumeReadyStartWaiters() {
+        let readyWaiters = startWaiters.filter {
+            invocationCount >= $0.expectedCount
+        }
+
+        startWaiters.removeAll {
+            invocationCount >= $0.expectedCount
+        }
+
+        readyWaiters.forEach {
+            $0.continuation.resume()
+        }
+    }
+}
+
 @Suite
 @MainActor
 struct TodoListViewModelTests {
@@ -257,6 +319,135 @@ struct TodoListViewModelTests {
         #expect(viewModel.state == .failure)
     }
     
+    @Test
+    func newerLoadResultWinsWhenOlderLoadFinishesLast() async {
+        let olderItems = [makeItem(title: "Older result")]
+        let newerItems = [makeItem(title: "Newer result")]
+        let controlledLoad = ControlledLoad()
+        let viewModel = TodoListViewModel(
+            loadTodosUseCase: LoadTodosUseCase {
+                try await controlledLoad.execute()
+            },
+            toggleTodoStatusUseCase: ToggleTodoStatusUseCase(
+                update: { _ in }
+            ),
+            deleteTodoUseCase: DeleteTodoUseCase(
+                delete: { _ in }
+            )
+        )
+
+        let olderLoad = Task {
+            await viewModel.load()
+        }
+
+        await controlledLoad.waitForStartCount(1)
+
+        let newerLoad = Task {
+            await viewModel.load()
+        }
+
+        await controlledLoad.waitForStartCount(2)
+        await controlledLoad.succeed(
+            invocation: 2,
+            with: newerItems
+        )
+        await newerLoad.value
+
+        #expect(viewModel.state == .content(newerItems))
+
+        await controlledLoad.succeed(
+            invocation: 1,
+            with: olderItems
+        )
+        await olderLoad.value
+
+        #expect(viewModel.state == .content(newerItems))
+    }
+
+    @Test
+    func cancelledLoadDoesNotTransitionToFailure() async {
+        let useCase = LoadTodosUseCase {
+            try await Task.sleep(for: .seconds(60))
+            return [TodoItem]()
+        }
+        let viewModel = TodoListViewModel(
+            loadTodosUseCase: useCase,
+            toggleTodoStatusUseCase: ToggleTodoStatusUseCase(
+                update: { _ in }
+            ),
+            deleteTodoUseCase: DeleteTodoUseCase(
+                delete: { _ in }
+            )
+        )
+
+        var loadTask: Task<Void, Never>?
+
+        await withCheckedContinuation { continuation in
+            var didResume = false
+
+            viewModel.onStateChange = { state in
+                guard
+                    !didResume,
+                    state == .loading
+                else {
+                    return
+                }
+
+                didResume = true
+                continuation.resume()
+            }
+
+            loadTask = Task {
+                await viewModel.load()
+            }
+        }
+
+        loadTask?.cancel()
+        await loadTask?.value
+
+        #expect(viewModel.state == .idle)
+    }
+
+    @Test
+    func searchChangeDuringLoadDoesNotReplaceLoadingState() async {
+        let matchingItem = makeItem(title: "Buy milk")
+        let otherItem = makeItem(title: "Clean apartment")
+        let controlledLoad = ControlledLoad()
+        let viewModel = TodoListViewModel(
+            loadTodosUseCase: LoadTodosUseCase {
+                try await controlledLoad.execute()
+            },
+            toggleTodoStatusUseCase: ToggleTodoStatusUseCase(
+                update: { _ in }
+            ),
+            deleteTodoUseCase: DeleteTodoUseCase(
+                delete: { _ in }
+            )
+        )
+
+        let loadTask = Task {
+            await viewModel.load()
+        }
+
+        await controlledLoad.waitForStartCount(1)
+
+        viewModel.updateSearchQuery("milk")
+        #expect(viewModel.state == .loading)
+
+        await controlledLoad.succeed(
+            invocation: 1,
+            with: [matchingItem, otherItem]
+        )
+        await loadTask.value
+
+        await waitForState(
+            .content([matchingItem]),
+            in: viewModel
+        )
+
+        #expect(viewModel.state == .content([matchingItem]))
+    }
+
     @Test
     func searchFiltersItemsByTitleAndDetailsIgnoringCase() async {
         let firstItem = TodoItem(
