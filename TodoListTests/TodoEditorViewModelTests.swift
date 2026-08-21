@@ -1,9 +1,43 @@
 import Foundation
+import Synchronization
 import Testing
 @testable import TodoList
 
 @Suite
 struct TodoEditorViewModelTests {
+
+    private actor SuspendedSave {
+        private var didStart = false
+        private var startContinuation:
+            CheckedContinuation<Void, Never>?
+        private var releaseContinuation:
+            CheckedContinuation<Void, Never>?
+
+        func suspend() async {
+            didStart = true
+            startContinuation?.resume()
+            startContinuation = nil
+
+            await withCheckedContinuation { continuation in
+                releaseContinuation = continuation
+            }
+        }
+
+        func waitUntilStarted() async {
+            guard !didStart else {
+                return
+            }
+
+            await withCheckedContinuation { continuation in
+                startContinuation = continuation
+            }
+        }
+
+        func release() {
+            releaseContinuation?.resume()
+            releaseContinuation = nil
+        }
+    }
 
     private actor CreateSpy {
         struct Call: Equatable {
@@ -296,6 +330,67 @@ struct TodoEditorViewModelTests {
         )
 
         #expect(viewModel.state == .failure)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    @MainActor
+    func cancelledSaveWithLateErrorReturnsToIdleAndAllowsRetry() async {
+        let draft = Self.makeDraft()
+        let expectedItem = Self.makeItem(
+            id: draft.id,
+            createdAt: draft.createdAt
+        )
+        let suspendedSave = SuspendedSave()
+        let attempts = Mutex(0)
+        let viewModel = TodoEditorViewModel(
+            mode: .create(draft),
+            createTodoUseCase: CreateTodoUseCaseStub(draft: draft) {
+                _,
+                _,
+                _ in
+                let attempt = attempts.withLock { count in
+                    count += 1
+                    return count
+                }
+
+                if attempt == 1 {
+                    await suspendedSave.suspend()
+                    throw TestError.storageFailed
+                }
+
+                return expectedItem
+            },
+            updateTodoUseCase: UpdateTodoUseCaseStub { _, _, _ in
+                throw TestError.unexpectedCall
+            }
+        )
+        var receivedStates: [TodoEditorViewModel.State] = []
+        viewModel.onStateChange = { state in
+            receivedStates.append(state)
+        }
+
+        let save = Task {
+            await viewModel.save(
+                title: "New title",
+                details: ""
+            )
+        }
+
+        await suspendedSave.waitUntilStarted()
+        save.cancel()
+        await suspendedSave.release()
+        await save.value
+
+        #expect(receivedStates == [.saving, .idle])
+        #expect(viewModel.state == .idle)
+
+        await viewModel.save(
+            title: "New title",
+            details: ""
+        )
+
+        #expect(attempts.withLock { $0 } == 2)
+        #expect(viewModel.state == .saved(expectedItem))
     }
 
     @MainActor

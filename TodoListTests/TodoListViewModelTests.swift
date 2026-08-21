@@ -417,6 +417,45 @@ struct TodoListViewModelTests {
         #expect(viewModel.state == .idle)
     }
 
+    @Test(.timeLimit(.minutes(1)))
+    func cancelledLoadWithLateFailureRestoresPreviousContent() async {
+        let initialItems = [makeItem(title: "Initial content")]
+        let controlledLoad = ControlledLoad()
+        let viewModel = TodoListViewModel(
+            loadTodosUseCase: LoadTodosUseCaseStub {
+                try await controlledLoad.execute()
+            },
+            toggleTodoStatusUseCase: ToggleTodoStatusUseCaseStub(
+                update: { _ in }
+            ),
+            deleteTodoUseCase: DeleteTodoUseCaseStub(
+                delete: { _ in }
+            )
+        )
+
+        let initialLoad = Task {
+            await viewModel.load()
+        }
+
+        await controlledLoad.waitForStartCount(1)
+        await controlledLoad.succeed(
+            invocation: 1,
+            with: initialItems
+        )
+        await initialLoad.value
+
+        let refresh = Task {
+            await viewModel.load()
+        }
+
+        await controlledLoad.waitForStartCount(2)
+        refresh.cancel()
+        await controlledLoad.fail(invocation: 2)
+        await refresh.value
+
+        #expect(viewModel.state == .content(initialItems))
+    }
+
     @Test
     func searchChangeDuringLoadDoesNotReplaceLoadingState() async {
         let matchingItem = makeItem(title: "Buy milk")
@@ -1098,6 +1137,106 @@ struct TodoListViewModelTests {
 
         #expect(viewModel.state == .content([item]))
         #expect(receivedError == nil)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func cancelledToggleWithLateFailureDoesNotReportErrorAndAllowsRetry() async {
+        let item = makeItem(title: "Cancelled toggle retry")
+        let mutation = SuspendedMutation(
+            suspendedIDs: [item.id]
+        )
+        let attempts = Mutex(0)
+        let viewModel = makeViewModel(
+            items: [item],
+            update: { updatedItem in
+                let attempt = attempts.withLock { count in
+                    count += 1
+                    return count
+                }
+
+                if attempt == 1 {
+                    await mutation.execute(id: updatedItem.id)
+                    throw ControlledLoadError.failed
+                }
+            }
+        )
+        var receivedError: TodoListViewModel.ActionError?
+        viewModel.onActionError = { error in
+            receivedError = error
+        }
+
+        await viewModel.load()
+
+        let toggle = Task {
+            await viewModel.toggleStatus(for: item)
+        }
+
+        await mutation.waitForStartCount(1)
+        toggle.cancel()
+        await mutation.release(id: item.id)
+        await toggle.value
+
+        #expect(viewModel.state == .content([item]))
+        #expect(receivedError == nil)
+
+        await viewModel.toggleStatus(for: item)
+
+        let toggledItem = TodoItem(
+            id: item.id,
+            title: item.title,
+            details: item.details,
+            createdAt: item.createdAt,
+            status: .completed
+        )
+
+        #expect(attempts.withLock { $0 } == 2)
+        #expect(viewModel.state == .content([toggledItem]))
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func cancelledDeleteWithLateFailureDoesNotReportErrorAndAllowsRetry() async {
+        let item = makeItem(title: "Cancelled delete retry")
+        let mutation = SuspendedMutation(
+            suspendedIDs: [item.id]
+        )
+        let attempts = Mutex(0)
+        let viewModel = makeViewModel(
+            items: [item],
+            delete: { id in
+                let attempt = attempts.withLock { count in
+                    count += 1
+                    return count
+                }
+
+                if attempt == 1 {
+                    await mutation.execute(id: id)
+                    throw ControlledLoadError.failed
+                }
+            }
+        )
+        var receivedError: TodoListViewModel.ActionError?
+        viewModel.onActionError = { error in
+            receivedError = error
+        }
+
+        await viewModel.load()
+
+        let delete = Task {
+            await viewModel.delete(item)
+        }
+
+        await mutation.waitForStartCount(1)
+        delete.cancel()
+        await mutation.release(id: item.id)
+        await delete.value
+
+        #expect(viewModel.state == .content([item]))
+        #expect(receivedError == nil)
+
+        await viewModel.delete(item)
+
+        #expect(attempts.withLock { $0 } == 2)
+        #expect(viewModel.state == .empty)
     }
 
     @Test

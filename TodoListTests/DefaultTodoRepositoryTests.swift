@@ -41,6 +41,47 @@ struct DefaultTodoRepositoryTests {
         }
     }
 
+    private actor SuspendedImporter: InitialTodoImporting {
+        private var didStart = false
+        private var startContinuation:
+            CheckedContinuation<Void, Never>?
+        private var resultContinuation:
+            CheckedContinuation<Void, Error>?
+
+        func run(importedAt: Date) async throws {
+            didStart = true
+            startContinuation?.resume()
+            startContinuation = nil
+
+            try await withCheckedThrowingContinuation {
+                continuation in
+                resultContinuation = continuation
+            }
+        }
+
+        func waitUntilStarted() async {
+            guard !didStart else {
+                return
+            }
+
+            await withCheckedContinuation { continuation in
+                startContinuation = continuation
+            }
+        }
+
+        func succeed() {
+            resultContinuation?.resume()
+            resultContinuation = nil
+        }
+
+        func fail() {
+            resultContinuation?.resume(
+                throwing: TestError.failed
+            )
+            resultContinuation = nil
+        }
+    }
+
     private actor StorageStub: TodoStoring {
         enum Failure: Sendable {
             case none
@@ -54,6 +95,7 @@ struct DefaultTodoRepositoryTests {
         private let createFailure: Failure
         private let updateFailure: Failure
         private let deleteFailure: Failure
+        private var numberOfFetches = 0
 
         init(
             items: [TodoItem] = [],
@@ -82,8 +124,13 @@ struct DefaultTodoRepositoryTests {
         }
 
         func fetchAll() async throws -> [TodoItem] {
+            numberOfFetches += 1
             try throwIfNeeded(fetchFailure)
             return items
+        }
+
+        func fetchCallCount() -> Int {
+            numberOfFetches
         }
 
         private func throwIfNeeded(_ failure: Failure) throws {
@@ -140,6 +187,54 @@ struct DefaultTodoRepositoryTests {
         await #expect(throws: CancellationError.self) {
             _ = try await repository.loadTodos()
         }
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func cancelledLoadMapsLateImporterFailureToCancellation() async {
+        let importer = SuspendedImporter()
+        let repository = DefaultTodoRepository(
+            importer: importer,
+            storage: StorageStub()
+        )
+
+        let load = Task {
+            try await repository.loadTodos()
+        }
+
+        await importer.waitUntilStarted()
+        load.cancel()
+        await importer.fail()
+
+        let result = await load.result
+
+        #expect(throws: CancellationError.self) {
+            try result.get()
+        }
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func cancelledLoadDoesNotFetchAfterImporterCompletes() async {
+        let importer = SuspendedImporter()
+        let storage = StorageStub()
+        let repository = DefaultTodoRepository(
+            importer: importer,
+            storage: storage
+        )
+
+        let load = Task {
+            try await repository.loadTodos()
+        }
+
+        await importer.waitUntilStarted()
+        load.cancel()
+        await importer.succeed()
+
+        let result = await load.result
+
+        #expect(throws: CancellationError.self) {
+            try result.get()
+        }
+        #expect(await storage.fetchCallCount() == 0)
     }
 
     @Test

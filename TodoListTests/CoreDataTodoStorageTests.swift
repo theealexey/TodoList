@@ -197,7 +197,7 @@ struct CoreDataTodoStorageTests {
 
         try await storage.importTodos(
             [
-                TodoImportRecord(
+                try TodoImportRecord(
                     remoteID: 42,
                     title: "Imported task",
                     isCompleted: true
@@ -234,7 +234,7 @@ struct CoreDataTodoStorageTests {
 
         try await storage.importTodos(
             [
-                TodoImportRecord(
+                try TodoImportRecord(
                     remoteID: 42,
                     title: "Imported task",
                     isCompleted: false
@@ -245,7 +245,7 @@ struct CoreDataTodoStorageTests {
 
         try await storage.importTodos(
             [
-                TodoImportRecord(
+                try TodoImportRecord(
                     remoteID: 42,
                     title: "Changed remote title",
                     isCompleted: true
@@ -271,17 +271,17 @@ struct CoreDataTodoStorageTests {
         )
 
         let records = [
-            TodoImportRecord(
+            try TodoImportRecord(
                 remoteID: 1,
                 title: "First task",
                 isCompleted: false
             ),
-            TodoImportRecord(
+            try TodoImportRecord(
                 remoteID: 2,
                 title: "Second task",
                 isCompleted: true
             ),
-            TodoImportRecord(
+            try TodoImportRecord(
                 remoteID: 1,
                 title: "Changed first task",
                 isCompleted: true
@@ -321,12 +321,12 @@ struct CoreDataTodoStorageTests {
         )
 
         let firstRecords = [
-            TodoImportRecord(
+            try TodoImportRecord(
                 remoteID: 42,
                 title: "First shared task",
                 isCompleted: false
             ),
-            TodoImportRecord(
+            try TodoImportRecord(
                 remoteID: 43,
                 title: "First unique task",
                 isCompleted: false
@@ -334,12 +334,12 @@ struct CoreDataTodoStorageTests {
         ]
 
         let secondRecords = [
-            TodoImportRecord(
+            try TodoImportRecord(
                 remoteID: 42,
                 title: "Second shared task",
                 isCompleted: true
             ),
-            TodoImportRecord(
+            try TodoImportRecord(
                 remoteID: 44,
                 title: "Second unique task",
                 isCompleted: true

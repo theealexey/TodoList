@@ -93,9 +93,11 @@ final class TodoEditorViewModel {
             return
         }
 
-        state = .saving
-
         do {
+            try Task.checkCancellation()
+
+            state = .saving
+
             let savedItem: TodoItem
 
             switch mode {
@@ -115,12 +117,24 @@ final class TodoEditorViewModel {
             }
 
             state = .saved(savedItem)
+        } catch is CancellationError {
+            state = .idle
         } catch let error as CreateTodoUseCaseError {
+            guard !Task.isCancelled else {
+                state = .idle
+                return
+            }
+
             handleCreateError(error)
         } catch let error as UpdateTodoUseCaseError {
+            guard !Task.isCancelled else {
+                state = .idle
+                return
+            }
+
             handleUpdateError(error)
         } catch {
-            state = .failure
+            state = Task.isCancelled ? .idle : .failure
         }
     }
 

@@ -104,6 +104,14 @@ final class TodoListViewModel {
                 return
             }
 
+            guard !Task.isCancelled else {
+                restoreStateAfterCancelledLoad(
+                    loadID: loadID,
+                    startingContentRevision: startingContentRevision
+                )
+                return
+            }
+
             currentLoadID = nil
 
             guard contentRevision == startingContentRevision else {
@@ -154,6 +162,10 @@ final class TodoListViewModel {
         } catch is CancellationError {
             return
         } catch {
+            guard !Task.isCancelled else {
+                return
+            }
+
             onActionError?(.statusUpdateFailed)
         }
     }
@@ -180,6 +192,10 @@ final class TodoListViewModel {
         } catch is CancellationError {
             return
         } catch {
+            guard !Task.isCancelled else {
+                return
+            }
+
             onActionError?(.deleteFailed)
         }
     }

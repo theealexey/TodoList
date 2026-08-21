@@ -23,10 +23,7 @@ actor InitialTodoImporter: InitialTodoImporting {
     }
 
     func run(importedAt: Date) async throws {
-        if let inFlightTask {
-            try await inFlightTask.value
-            return
-        }
+        try Task.checkCancellation()
 
         guard !stateStore.isCompleted(
             for: storeIdentifier
@@ -34,21 +31,25 @@ actor InitialTodoImporter: InitialTodoImporting {
             return
         }
 
-        try Task.checkCancellation()
+        let task: Task<Void, Error>
 
-        let task = Task {
-            try await performImport(
-                importedAt: importedAt
-            )
+        if let inFlightTask {
+            task = inFlightTask
+        } else {
+            task = Task { [self] in
+                defer {
+                    inFlightTask = nil
+                }
+
+                try await performImport(
+                    importedAt: importedAt
+                )
+            }
+
+            inFlightTask = task
         }
 
-        inFlightTask = task
-
-        defer {
-            inFlightTask = nil
-        }
-
-        try await task.value
+        try await waitForSharedImport(task)
     }
 
     private func performImport(
@@ -56,8 +57,8 @@ actor InitialTodoImporter: InitialTodoImporting {
     ) async throws {
         let todos = try await api.fetchTodos()
 
-        let records = todos.map { todo in
-            TodoImportRecord(
+        let records = try todos.map { todo in
+            try TodoImportRecord(
                 remoteID: todo.id,
                 title: todo.todo,
                 isCompleted: todo.completed
@@ -72,5 +73,34 @@ actor InitialTodoImporter: InitialTodoImporting {
         stateStore.markCompleted(
             for: storeIdentifier
         )
+    }
+
+    private func waitForSharedImport(
+        _ task: Task<Void, Error>
+    ) async throws {
+        let stream = AsyncThrowingStream<Void, Error> {
+            continuation in
+            let observer = Task {
+                do {
+                    try await task.value
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+
+            continuation.onTermination = { _ in
+                observer.cancel()
+            }
+        }
+
+        do {
+            for try await _ in stream {}
+        } catch {
+            try Task.checkCancellation()
+            throw error
+        }
+
+        try Task.checkCancellation()
     }
 }
