@@ -74,8 +74,16 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     private func showTodoList() throws {
-        let appContainer = try AppContainer(
-            coreDataStack: coreDataStack
+        let storeIdentifier = try coreDataStack
+            .loadedStoreIdentifier()
+
+        let storage = CoreDataTodoStorage(
+            container: coreDataStack.container
+        )
+
+        let appContainer = AppContainer(
+            storage: storage,
+            storeIdentifier: storeIdentifier
         )
 
         let assembly = TodoListAssembly(

@@ -3,21 +3,17 @@ final class AppContainer {
     let todoRepository: DefaultTodoRepository
 
     init(
-        coreDataStack: CoreDataStack,
-        todosAPI: TodosAPI = TodosAPI(),
-        importStateStore: InitialTodoImportStateStore =
+        storage: any TodoStoring & TodoImportStoring,
+        storeIdentifier: String,
+        todosFetcher: any TodosFetching = TodosAPI(),
+        importStateStore: any InitialTodoImportStateStoring =
             InitialTodoImportStateStore()
-    ) throws {
-        let storage = CoreDataTodoStorage(
-            container: coreDataStack.container
-        )
-
+    ) {
         let importer = InitialTodoImporter(
-            api: todosAPI,
+            api: todosFetcher,
             storage: storage,
             stateStore: importStateStore,
-            storeIdentifier: try coreDataStack
-                .loadedStoreIdentifier()
+            storeIdentifier: storeIdentifier
         )
 
         todoRepository = DefaultTodoRepository(

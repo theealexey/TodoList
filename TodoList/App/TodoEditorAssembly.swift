@@ -1,4 +1,3 @@
-@MainActor
 struct TodoEditorAssembly<
     CreateUseCase: CreateTodoUseCaseProtocol,
     UpdateUseCase: UpdateTodoUseCaseProtocol
@@ -15,27 +14,37 @@ struct TodoEditorAssembly<
         self.updateTodoUseCase = updateTodoUseCase
     }
 
+    @MainActor
     func makeCreateViewController(
         onSaved: @escaping (TodoItem) -> Void
     ) -> TodoEditorViewController {
-        makeViewController(
-            mode: .create(
-                createTodoUseCase.makeDraft()
-            ),
+        let draft = createTodoUseCase.makeDraft()
+        let mode = TodoEditorViewModel.Mode.create(
+            draft
+        )
+
+        return makeViewController(
+            mode: mode,
             onSaved: onSaved
         )
     }
 
+    @MainActor
     func makeEditViewController(
         item: TodoItem,
         onSaved: @escaping (TodoItem) -> Void
     ) -> TodoEditorViewController {
-        makeViewController(
-            mode: .edit(item),
+        let mode = TodoEditorViewModel.Mode.edit(
+            item
+        )
+
+        return makeViewController(
+            mode: mode,
             onSaved: onSaved
         )
     }
 
+    @MainActor
     private func makeViewController(
         mode: TodoEditorViewModel.Mode,
         onSaved: @escaping (TodoItem) -> Void

@@ -1,6 +1,5 @@
 import UIKit
 
-@MainActor
 struct TodoListAssembly<Repository: TodoRepository> {
 
     private let repository: Repository
@@ -9,30 +8,41 @@ struct TodoListAssembly<Repository: TodoRepository> {
         self.repository = repository
     }
 
+    @MainActor
     func makeViewController() -> TodoListViewController {
+        let loadTodosUseCase = LoadTodosUseCase(
+            repository: repository
+        )
+
+        let toggleTodoStatusUseCase = ToggleTodoStatusUseCase(
+            repository: repository
+        )
+
+        let deleteTodoUseCase = DeleteTodoUseCase(
+            repository: repository
+        )
+
         let viewModel = TodoListViewModel(
-            loadTodosUseCase: LoadTodosUseCase(
-                repository: repository
-            ),
-            toggleTodoStatusUseCase: ToggleTodoStatusUseCase(
-                repository: repository
-            ),
-            deleteTodoUseCase: DeleteTodoUseCase(
-                repository: repository
-            )
+            loadTodosUseCase: loadTodosUseCase,
+            toggleTodoStatusUseCase: toggleTodoStatusUseCase,
+            deleteTodoUseCase: deleteTodoUseCase
         )
 
         let viewController = TodoListViewController(
             viewModel: viewModel
         )
 
+        let createTodoUseCase = CreateTodoUseCase(
+            repository: repository
+        )
+
+        let updateTodoUseCase = UpdateTodoUseCase(
+            repository: repository
+        )
+
         let editorAssembly = TodoEditorAssembly(
-            createTodoUseCase: CreateTodoUseCase(
-                repository: repository
-            ),
-            updateTodoUseCase: UpdateTodoUseCase(
-                repository: repository
-            )
+            createTodoUseCase: createTodoUseCase,
+            updateTodoUseCase: updateTodoUseCase
         )
 
         configureEditorFlows(
@@ -43,6 +53,7 @@ struct TodoListAssembly<Repository: TodoRepository> {
         return viewController
     }
 
+    @MainActor
     private func configureEditorFlows<
         CreateUseCase: CreateTodoUseCaseProtocol,
         UpdateUseCase: UpdateTodoUseCaseProtocol
