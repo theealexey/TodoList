@@ -1,19 +1,7 @@
 import CoreData
 import Foundation
 
-struct TodoImportRecord: Equatable, Sendable {
-    let remoteID: Int
-    let title: String
-    let isCompleted: Bool
-}
-
-enum CoreDataTodoStorageError: Error, Equatable, Sendable {
-    case storedTodoEntityMissing
-    case invalidStoredData
-    case todoNotFound(id: UUID)
-}
-
-final class CoreDataTodoStorage: Sendable {
+final class CoreDataTodoStorage: TodoStoring, TodoImportStoring {
 
     private static let entityName = "StoredTodo"
     private static let localRemoteID: Int64 = 0
@@ -64,7 +52,7 @@ final class CoreDataTodoStorage: Sendable {
                 .fetch(request)
                 .first
             else {
-                throw CoreDataTodoStorageError.todoNotFound(
+                throw TodoStorageError.todoNotFound(
                     id: item.id
                 )
             }
@@ -96,7 +84,7 @@ final class CoreDataTodoStorage: Sendable {
                 .fetch(request)
                 .first
             else {
-                throw CoreDataTodoStorageError.todoNotFound(
+                throw TodoStorageError.todoNotFound(
                     id: id
                 )
             }
@@ -104,24 +92,6 @@ final class CoreDataTodoStorage: Sendable {
             context.delete(storedTodo)
             try context.save()
         }
-    }
-
-    func createImportedTodo(
-        remoteID: Int,
-        title: String,
-        importedAt: Date,
-        isCompleted: Bool
-    ) async throws {
-        let record = TodoImportRecord(
-            remoteID: remoteID,
-            title: title,
-            isCompleted: isCompleted
-        )
-
-        try await importTodos(
-            [record],
-            importedAt: importedAt
-        )
     }
 
     func importTodos(
@@ -246,7 +216,7 @@ final class CoreDataTodoStorage: Sendable {
             let details = storedTodo.details,
             let createdAt = storedTodo.createdAt
         else {
-            throw CoreDataTodoStorageError.invalidStoredData
+            throw TodoStorageError.invalidStoredData
         }
 
         return TodoItem(
@@ -265,7 +235,7 @@ final class CoreDataTodoStorage: Sendable {
             forEntityName: Self.entityName,
             in: context
         ) else {
-            throw CoreDataTodoStorageError.storedTodoEntityMissing
+            throw TodoStorageError.storedTodoEntityMissing
         }
 
         return StoredTodo(

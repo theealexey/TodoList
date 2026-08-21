@@ -266,9 +266,9 @@ final class TodoListView: UIView {
             for: .touchUpInside
         )
 
-        addButton.accessibilityLabel = NSLocalizedString(
-            "todo_list.add_button.accessibility_label",
-            value: "Create task",
+        addButton.accessibilityLabel = String(
+            localized: "todo_list.add_button.accessibility_label",
+            defaultValue: "Create task",
             comment: "Accessibility label for the add todo button."
         )
 

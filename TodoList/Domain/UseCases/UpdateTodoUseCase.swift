@@ -4,14 +4,20 @@ enum UpdateTodoUseCaseError: Error, Equatable, Sendable {
     case emptyTitle
 }
 
-struct UpdateTodoUseCase {
+protocol UpdateTodoUseCaseProtocol: Sendable {
+    func execute(
+        item: TodoItem,
+        title: String,
+        details: String
+    ) async throws -> TodoItem
+}
 
-    typealias Update = (TodoItem) async throws -> Void
+struct UpdateTodoUseCase<Repository: TodoRepository>: UpdateTodoUseCaseProtocol {
 
-    private let update: Update
+    private let repository: Repository
 
-    init(update: @escaping Update) {
-        self.update = update
+    init(repository: Repository) {
+        self.repository = repository
     }
 
     func execute(
@@ -39,7 +45,7 @@ struct UpdateTodoUseCase {
             status: item.status
         )
 
-        try await update(updatedItem)
+        try await repository.update(updatedItem)
 
         return updatedItem
     }

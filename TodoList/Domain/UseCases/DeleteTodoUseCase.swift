@@ -1,16 +1,18 @@
 import Foundation
 
-struct DeleteTodoUseCase {
+protocol DeleteTodoUseCaseProtocol: Sendable {
+    func execute(id: UUID) async throws
+}
 
-    typealias Delete = (UUID) async throws -> Void
+struct DeleteTodoUseCase<Repository: TodoRepository>: DeleteTodoUseCaseProtocol {
 
-    private let delete: Delete
+    private let repository: Repository
 
-    init(delete: @escaping Delete) {
-        self.delete = delete
+    init(repository: Repository) {
+        self.repository = repository
     }
 
     func execute(id: UUID) async throws {
-        try await delete(id)
+        try await repository.delete(id: id)
     }
 }

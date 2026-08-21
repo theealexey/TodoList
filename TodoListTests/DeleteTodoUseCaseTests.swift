@@ -5,61 +5,57 @@ import Testing
 @Suite
 struct DeleteTodoUseCaseTests {
 
-    private actor DeleteSpy {
+    private enum TestError: Error, Equatable, Sendable {
+        case deleteFailed
+    }
 
-        private var receivedIDs: [UUID] = []
+    private actor RepositorySpy: TodoRepository {
+        private let shouldFail: Bool
+        private var deletedIDs: [UUID] = []
 
-        func delete(id: UUID) {
-            receivedIDs.append(id)
+        init(shouldFail: Bool = false) {
+            self.shouldFail = shouldFail
+        }
+
+        func loadTodos() async throws -> [TodoItem] { [] }
+        func create(_ item: TodoItem) async throws {}
+        func update(_ item: TodoItem) async throws {}
+
+        func delete(id: UUID) async throws {
+            if shouldFail {
+                throw TestError.deleteFailed
+            }
+            deletedIDs.append(id)
         }
 
         func ids() -> [UUID] {
-            receivedIDs
+            deletedIDs
         }
     }
 
     @Test
     func executePassesTodoIDToDeleteDependency() async throws {
-        let expectedID = UUID()
-        let spy = DeleteSpy()
+        let repository = RepositorySpy()
+        let useCase = DeleteTodoUseCase(repository: repository)
+        let id = UUID()
 
-        let useCase = DeleteTodoUseCase(
-            delete: { id in
-                await spy.delete(id: id)
-            }
-        )
+        try await useCase.execute(id: id)
 
-        try await useCase.execute(id: expectedID)
-
-        let receivedIDs = await spy.ids()
-
-        #expect(receivedIDs == [expectedID])
+        #expect(await repository.ids() == [id])
     }
 
     @Test
     func executePropagatesDeleteError() async {
-        enum TestError: Error, Equatable {
-            case deleteFailed
-        }
-
-        let useCase = DeleteTodoUseCase(
-            delete: { _ in
-                throw TestError.deleteFailed
-            }
-        )
+        let repository = RepositorySpy(shouldFail: true)
+        let useCase = DeleteTodoUseCase(repository: repository)
 
         do {
             try await useCase.execute(id: UUID())
-
-            Issue.record(
-                "Expected deleteFailed error"
-            )
+            Issue.record("Expected delete to fail")
         } catch let error as TestError {
             #expect(error == .deleteFailed)
         } catch {
-            Issue.record(
-                "Received unexpected error: \(error)"
-            )
+            Issue.record("Received unexpected error: \(error)")
         }
     }
 }

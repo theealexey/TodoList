@@ -258,7 +258,7 @@
       }
     },
     "todo_list.failure.message" : {
-      "comment" : "Todo list loading failure message",
+      "comment" : "Startup loading failure message\nTodo list loading failure message",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -275,7 +275,7 @@
       }
     },
     "todo_list.retry.title" : {
-      "comment" : "Todo list retry button title",
+      "comment" : "Startup retry button title\nTodo list retry button title",
       "localizations" : {
         "en" : {
           "stringUnit" : {

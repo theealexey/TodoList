@@ -18,15 +18,18 @@ final class TodoListViewModel {
         case operationInProgress
     }
 
-    private let loadTodosUseCase: LoadTodosUseCase
-    private let toggleTodoStatusUseCase: ToggleTodoStatusUseCase
-    private let deleteTodoUseCase: DeleteTodoUseCase
+    private let loadTodosUseCase: any LoadTodosUseCaseProtocol
+    private let toggleTodoStatusUseCase: any ToggleTodoStatusUseCaseProtocol
+    private let deleteTodoUseCase: any DeleteTodoUseCaseProtocol
     private let searchQueue: OperationQueue
 
     private var allItems: [TodoItem] = []
     private var searchQuery = ""
     private var processingItemIDs: Set<UUID> = []
-    private var searchRevision = 0
+    private var currentSearchOperation: BlockOperation?
+    private var currentLoadID: UUID?
+    private var stateBeforeLoading: State?
+    private var contentRevision = 0
 
     private(set) var state: State = .idle {
         didSet {
@@ -38,27 +41,86 @@ final class TodoListViewModel {
     var onActionError: ((ActionError) -> Void)?
 
     init(
-        loadTodosUseCase: LoadTodosUseCase,
-        toggleTodoStatusUseCase: ToggleTodoStatusUseCase,
-        deleteTodoUseCase: DeleteTodoUseCase,
-        searchQueue: OperationQueue = OperationQueue()
+        loadTodosUseCase: any LoadTodosUseCaseProtocol,
+        toggleTodoStatusUseCase: any ToggleTodoStatusUseCaseProtocol,
+        deleteTodoUseCase: any DeleteTodoUseCaseProtocol
     ) {
         self.loadTodosUseCase = loadTodosUseCase
         self.toggleTodoStatusUseCase = toggleTodoStatusUseCase
         self.deleteTodoUseCase = deleteTodoUseCase
-        self.searchQueue = searchQueue
 
+        let searchQueue = OperationQueue()
         searchQueue.maxConcurrentOperationCount = 1
         searchQueue.qualityOfService = .userInitiated
+        self.searchQueue = searchQueue
     }
     
     func load() async {
+        cancelCurrentSearch()
+
+        let loadID = UUID()
+        let startingContentRevision = contentRevision
+
+        if currentLoadID == nil {
+            stateBeforeLoading = state
+        }
+
+        currentLoadID = loadID
         state = .loading
 
         do {
-            allItems = try await loadTodosUseCase.execute()
+            let loadedItems = try await loadTodosUseCase.execute()
+
+            guard currentLoadID == loadID else {
+                return
+            }
+
+            guard !Task.isCancelled else {
+                restoreStateAfterCancelledLoad(
+                    loadID: loadID,
+                    startingContentRevision: startingContentRevision
+                )
+                return
+            }
+
+            currentLoadID = nil
+
+            guard contentRevision == startingContentRevision else {
+                stateBeforeLoading = nil
+                applySearch()
+                return
+            }
+
+            allItems = loadedItems
+            stateBeforeLoading = nil
             applySearch()
+        } catch is CancellationError {
+            restoreStateAfterCancelledLoad(
+                loadID: loadID,
+                startingContentRevision: startingContentRevision
+            )
         } catch {
+            guard currentLoadID == loadID else {
+                return
+            }
+
+            guard !Task.isCancelled else {
+                restoreStateAfterCancelledLoad(
+                    loadID: loadID,
+                    startingContentRevision: startingContentRevision
+                )
+                return
+            }
+
+            currentLoadID = nil
+
+            guard contentRevision == startingContentRevision else {
+                stateBeforeLoading = nil
+                applySearch()
+                return
+            }
+
+            stateBeforeLoading = nil
             allItems = []
             state = .failure
         }
@@ -95,8 +157,15 @@ final class TodoListViewModel {
             }
 
             allItems[index] = updatedItem
+            contentRevision += 1
             applySearch()
+        } catch is CancellationError {
+            return
         } catch {
+            guard !Task.isCancelled else {
+                return
+            }
+
             onActionError?(.statusUpdateFailed)
         }
     }
@@ -118,17 +187,25 @@ final class TodoListViewModel {
                 $0.id == item.id
             }
 
+            contentRevision += 1
             applySearch()
+        } catch is CancellationError {
+            return
         } catch {
+            guard !Task.isCancelled else {
+                return
+            }
+
             onActionError?(.deleteFailed)
         }
     }
 
     private func applySearch() {
-        searchRevision += 1
-        let revision = searchRevision
+        guard currentLoadID == nil else {
+            return
+        }
 
-        searchQueue.cancelAllOperations()
+        cancelCurrentSearch()
 
         guard !allItems.isEmpty else {
             state = .empty
@@ -142,30 +219,89 @@ final class TodoListViewModel {
 
         let items = allItems
         let query = searchQuery
+        let operation = BlockOperation()
 
-        searchQueue.addOperation {
-            let filteredItems = items.filter { item in
-                item.title.localizedCaseInsensitiveContains(
-                    query
-                )
-                || item.details.localizedCaseInsensitiveContains(
-                    query
-                )
+        operation.addExecutionBlock {
+            [weak operation, weak self] in
+            guard let operation, !operation.isCancelled else {
+                return
             }
 
-            DispatchQueue.main.async { [weak self] in
-                guard let self else {
+            var filteredItems: [TodoItem] = []
+            filteredItems.reserveCapacity(items.count)
+
+            for item in items {
+                guard !operation.isCancelled else {
                     return
                 }
 
-                guard self.searchRevision == revision else {
+                let matchesTitle =
+                    item.title.localizedCaseInsensitiveContains(
+                        query
+                    )
+
+                let matchesDetails =
+                    item.details.localizedCaseInsensitiveContains(
+                        query
+                    )
+
+                if matchesTitle || matchesDetails {
+                    filteredItems.append(item)
+                }
+            }
+
+            guard !operation.isCancelled else {
+                return
+            }
+
+            let result = filteredItems
+
+            DispatchQueue.main.async {
+                [weak self, weak operation] in
+                guard
+                    let self,
+                    let operation,
+                    !operation.isCancelled,
+                    self.currentSearchOperation === operation
+                else {
                     return
                 }
 
-                self.state = filteredItems.isEmpty
+                self.currentSearchOperation = nil
+                self.state = result.isEmpty
                     ? .noResults
-                    : .content(filteredItems)
+                    : .content(result)
             }
         }
+
+        currentSearchOperation = operation
+        searchQueue.addOperation(operation)
+    }
+
+
+    private func restoreStateAfterCancelledLoad(
+        loadID: UUID,
+        startingContentRevision: Int
+    ) {
+        guard currentLoadID == loadID else {
+            return
+        }
+
+        currentLoadID = nil
+
+        guard contentRevision == startingContentRevision else {
+            stateBeforeLoading = nil
+            applySearch()
+            return
+        }
+
+        let restoredState = stateBeforeLoading ?? .idle
+        stateBeforeLoading = nil
+        state = restoredState
+    }
+
+    private func cancelCurrentSearch() {
+        currentSearchOperation?.cancel()
+        currentSearchOperation = nil
     }
 }

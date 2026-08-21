@@ -1,13 +1,15 @@
 import Foundation
 
-struct ToggleTodoStatusUseCase {
+protocol ToggleTodoStatusUseCaseProtocol: Sendable {
+    func execute(item: TodoItem) async throws -> TodoItem
+}
 
-    typealias Update = (TodoItem) async throws -> Void
+struct ToggleTodoStatusUseCase<Repository: TodoRepository>: ToggleTodoStatusUseCaseProtocol {
 
-    private let update: Update
+    private let repository: Repository
 
-    init(update: @escaping Update) {
-        self.update = update
+    init(repository: Repository) {
+        self.repository = repository
     }
 
     func execute(
@@ -26,7 +28,7 @@ struct ToggleTodoStatusUseCase {
             status: updatedStatus
         )
 
-        try await update(updatedItem)
+        try await repository.update(updatedItem)
 
         return updatedItem
     }

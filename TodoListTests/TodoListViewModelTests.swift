@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 import Testing
 @testable import TodoList
 
@@ -79,6 +80,78 @@ private actor SuspendedMutation {
     }
 }
 
+private enum ControlledLoadError: Error, Sendable {
+    case failed
+}
+
+private actor ControlledLoad {
+
+    private struct StartWaiter {
+        let expectedCount: Int
+        let continuation: CheckedContinuation<Void, Never>
+    }
+
+    private var invocationCount = 0
+    private var continuations: [
+        Int: CheckedContinuation<[TodoItem], Error>
+    ] = [:]
+    private var startWaiters: [StartWaiter] = []
+
+    func execute() async throws -> [TodoItem] {
+        invocationCount += 1
+        let invocation = invocationCount
+        resumeReadyStartWaiters()
+
+        return try await withCheckedThrowingContinuation { continuation in
+            continuations[invocation] = continuation
+        }
+    }
+
+    func waitForStartCount(_ expectedCount: Int) async {
+        guard invocationCount < expectedCount else {
+            return
+        }
+
+        await withCheckedContinuation { continuation in
+            startWaiters.append(
+                StartWaiter(
+                    expectedCount: expectedCount,
+                    continuation: continuation
+                )
+            )
+        }
+    }
+
+    func succeed(
+        invocation: Int,
+        with items: [TodoItem]
+    ) {
+        continuations.removeValue(
+            forKey: invocation
+        )?.resume(returning: items)
+    }
+
+    func fail(invocation: Int) {
+        continuations.removeValue(
+            forKey: invocation
+        )?.resume(throwing: ControlledLoadError.failed)
+    }
+
+    private func resumeReadyStartWaiters() {
+        let readyWaiters = startWaiters.filter {
+            invocationCount >= $0.expectedCount
+        }
+
+        startWaiters.removeAll {
+            invocationCount >= $0.expectedCount
+        }
+
+        readyWaiters.forEach {
+            $0.continuation.resume()
+        }
+    }
+}
+
 @Suite
 @MainActor
 struct TodoListViewModelTests {
@@ -89,19 +162,19 @@ struct TodoListViewModelTests {
     
     private func makeViewModel(
         items: [TodoItem],
-        update: @escaping ToggleTodoStatusUseCase.Update = { _ in },
-        delete: @escaping DeleteTodoUseCase.Delete = { _ in }
+        update: @escaping ToggleTodoStatusUseCaseStub.Update = { _ in },
+        delete: @escaping DeleteTodoUseCaseStub.Delete = { _ in }
     ) -> TodoListViewModel {
         TodoListViewModel(
-            loadTodosUseCase: LoadTodosUseCase {
+            loadTodosUseCase: LoadTodosUseCaseStub {
                 items
             },
             toggleTodoStatusUseCase:
-                ToggleTodoStatusUseCase(
+                ToggleTodoStatusUseCaseStub(
                     update: update
                 ),
             deleteTodoUseCase:
-                DeleteTodoUseCase(
+                DeleteTodoUseCaseStub(
                     delete: delete
                 )
         )
@@ -141,12 +214,12 @@ struct TodoListViewModelTests {
             )
         ]
 
-        let loadTodosUseCase = LoadTodosUseCase {
+        let loadTodosUseCase = LoadTodosUseCaseStub {
             expectedItems
         }
 
         let toggleTodoStatusUseCase =
-            ToggleTodoStatusUseCase(
+            ToggleTodoStatusUseCaseStub(
                 update: { _ in }
             )
 
@@ -154,7 +227,7 @@ struct TodoListViewModelTests {
             loadTodosUseCase: loadTodosUseCase,
             toggleTodoStatusUseCase:
                 toggleTodoStatusUseCase,
-            deleteTodoUseCase: DeleteTodoUseCase(
+            deleteTodoUseCase: DeleteTodoUseCaseStub(
                 delete: { _ in }
             )
 )
@@ -185,8 +258,7 @@ struct TodoListViewModelTests {
     
     @Test
     func loadTransitionsFromLoadingToEmpty() async {
-        let useCase = LoadTodosUseCase(
-            load: {
+        let useCase = LoadTodosUseCaseStub({
                 []
             }
         )
@@ -194,10 +266,10 @@ struct TodoListViewModelTests {
         let viewModel = TodoListViewModel(
             loadTodosUseCase: useCase,
             toggleTodoStatusUseCase:
-                ToggleTodoStatusUseCase(
+                ToggleTodoStatusUseCaseStub(
                     update: { _ in }
                 ),
-            deleteTodoUseCase: DeleteTodoUseCase(
+            deleteTodoUseCase: DeleteTodoUseCaseStub(
                 delete: { _ in }
             ),
         )
@@ -222,8 +294,7 @@ struct TodoListViewModelTests {
     
     @Test
     func loadTransitionsFromLoadingToFailure() async {
-        let useCase = LoadTodosUseCase(
-            load: { () async throws -> [TodoItem] in
+        let useCase = LoadTodosUseCaseStub({ () async throws -> [TodoItem] in
                 throw TestError.loadingFailed
             }
         )
@@ -231,10 +302,10 @@ struct TodoListViewModelTests {
         let viewModel = TodoListViewModel(
             loadTodosUseCase: useCase,
             toggleTodoStatusUseCase:
-                ToggleTodoStatusUseCase(
+                ToggleTodoStatusUseCaseStub(
                     update: { _ in }
                 ),
-            deleteTodoUseCase: DeleteTodoUseCase(
+            deleteTodoUseCase: DeleteTodoUseCaseStub(
                 delete: { _ in }
             )
         )
@@ -258,6 +329,314 @@ struct TodoListViewModelTests {
     }
     
     @Test
+    func newerLoadResultWinsWhenOlderLoadFinishesLast() async {
+        let olderItems = [makeItem(title: "Older result")]
+        let newerItems = [makeItem(title: "Newer result")]
+        let controlledLoad = ControlledLoad()
+        let viewModel = TodoListViewModel(
+            loadTodosUseCase: LoadTodosUseCaseStub {
+                try await controlledLoad.execute()
+            },
+            toggleTodoStatusUseCase: ToggleTodoStatusUseCaseStub(
+                update: { _ in }
+            ),
+            deleteTodoUseCase: DeleteTodoUseCaseStub(
+                delete: { _ in }
+            )
+        )
+
+        let olderLoad = Task {
+            await viewModel.load()
+        }
+
+        await controlledLoad.waitForStartCount(1)
+
+        let newerLoad = Task {
+            await viewModel.load()
+        }
+
+        await controlledLoad.waitForStartCount(2)
+        await controlledLoad.succeed(
+            invocation: 2,
+            with: newerItems
+        )
+        await newerLoad.value
+
+        #expect(viewModel.state == .content(newerItems))
+
+        await controlledLoad.succeed(
+            invocation: 1,
+            with: olderItems
+        )
+        await olderLoad.value
+
+        #expect(viewModel.state == .content(newerItems))
+    }
+
+    @Test
+    func cancelledLoadDoesNotTransitionToFailure() async {
+        let useCase = LoadTodosUseCaseStub {
+            try await Task.sleep(for: .seconds(60))
+            return [TodoItem]()
+        }
+        let viewModel = TodoListViewModel(
+            loadTodosUseCase: useCase,
+            toggleTodoStatusUseCase: ToggleTodoStatusUseCaseStub(
+                update: { _ in }
+            ),
+            deleteTodoUseCase: DeleteTodoUseCaseStub(
+                delete: { _ in }
+            )
+        )
+
+        var loadTask: Task<Void, Never>?
+
+        await withCheckedContinuation { continuation in
+            var didResume = false
+
+            viewModel.onStateChange = { state in
+                guard
+                    !didResume,
+                    state == .loading
+                else {
+                    return
+                }
+
+                didResume = true
+                continuation.resume()
+            }
+
+            loadTask = Task {
+                await viewModel.load()
+            }
+        }
+
+        loadTask?.cancel()
+        await loadTask?.value
+
+        #expect(viewModel.state == .idle)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func cancelledLoadWithLateFailureRestoresPreviousContent() async {
+        let initialItems = [makeItem(title: "Initial content")]
+        let controlledLoad = ControlledLoad()
+        let viewModel = TodoListViewModel(
+            loadTodosUseCase: LoadTodosUseCaseStub {
+                try await controlledLoad.execute()
+            },
+            toggleTodoStatusUseCase: ToggleTodoStatusUseCaseStub(
+                update: { _ in }
+            ),
+            deleteTodoUseCase: DeleteTodoUseCaseStub(
+                delete: { _ in }
+            )
+        )
+
+        let initialLoad = Task {
+            await viewModel.load()
+        }
+
+        await controlledLoad.waitForStartCount(1)
+        await controlledLoad.succeed(
+            invocation: 1,
+            with: initialItems
+        )
+        await initialLoad.value
+
+        let refresh = Task {
+            await viewModel.load()
+        }
+
+        await controlledLoad.waitForStartCount(2)
+        refresh.cancel()
+        await controlledLoad.fail(invocation: 2)
+        await refresh.value
+
+        #expect(viewModel.state == .content(initialItems))
+    }
+
+    @Test
+    func searchChangeDuringLoadDoesNotReplaceLoadingState() async {
+        let matchingItem = makeItem(title: "Buy milk")
+        let otherItem = makeItem(title: "Clean apartment")
+        let controlledLoad = ControlledLoad()
+        let viewModel = TodoListViewModel(
+            loadTodosUseCase: LoadTodosUseCaseStub {
+                try await controlledLoad.execute()
+            },
+            toggleTodoStatusUseCase: ToggleTodoStatusUseCaseStub(
+                update: { _ in }
+            ),
+            deleteTodoUseCase: DeleteTodoUseCaseStub(
+                delete: { _ in }
+            )
+        )
+
+        let loadTask = Task {
+            await viewModel.load()
+        }
+
+        await controlledLoad.waitForStartCount(1)
+
+        viewModel.updateSearchQuery("milk")
+        #expect(viewModel.state == .loading)
+
+        await controlledLoad.succeed(
+            invocation: 1,
+            with: [matchingItem, otherItem]
+        )
+        await loadTask.value
+
+        await waitForState(
+            .content([matchingItem]),
+            in: viewModel
+        )
+
+        #expect(viewModel.state == .content([matchingItem]))
+    }
+
+    @Test
+    func toggleDuringRefreshPreventsStaleLoadFromRestoringOldItem() async {
+        let item = makeItem(title: "Refresh toggle")
+        let controlledLoad = ControlledLoad()
+        let viewModel = TodoListViewModel(
+            loadTodosUseCase: LoadTodosUseCaseStub {
+                try await controlledLoad.execute()
+            },
+            toggleTodoStatusUseCase: ToggleTodoStatusUseCaseStub(
+                update: { _ in }
+            ),
+            deleteTodoUseCase: DeleteTodoUseCaseStub(
+                delete: { _ in }
+            )
+        )
+
+        let initialLoad = Task {
+            await viewModel.load()
+        }
+        await controlledLoad.waitForStartCount(1)
+        await controlledLoad.succeed(
+            invocation: 1,
+            with: [item]
+        )
+        await initialLoad.value
+
+        let refresh = Task {
+            await viewModel.load()
+        }
+        await controlledLoad.waitForStartCount(2)
+
+        await viewModel.toggleStatus(for: item)
+        #expect(viewModel.state == .loading)
+
+        await controlledLoad.succeed(
+            invocation: 2,
+            with: [item]
+        )
+        await refresh.value
+
+        let expectedItem = TodoItem(
+            id: item.id,
+            title: item.title,
+            details: item.details,
+            createdAt: item.createdAt,
+            status: .completed
+        )
+
+        #expect(viewModel.state == .content([expectedItem]))
+    }
+
+    @Test
+    func deleteDuringRefreshPreventsStaleLoadFromRestoringDeletedItem() async {
+        let item = makeItem(title: "Refresh delete")
+        let controlledLoad = ControlledLoad()
+        let viewModel = TodoListViewModel(
+            loadTodosUseCase: LoadTodosUseCaseStub {
+                try await controlledLoad.execute()
+            },
+            toggleTodoStatusUseCase: ToggleTodoStatusUseCaseStub(
+                update: { _ in }
+            ),
+            deleteTodoUseCase: DeleteTodoUseCaseStub(
+                delete: { _ in }
+            )
+        )
+
+        let initialLoad = Task {
+            await viewModel.load()
+        }
+        await controlledLoad.waitForStartCount(1)
+        await controlledLoad.succeed(
+            invocation: 1,
+            with: [item]
+        )
+        await initialLoad.value
+
+        let refresh = Task {
+            await viewModel.load()
+        }
+        await controlledLoad.waitForStartCount(2)
+
+        await viewModel.delete(item)
+        #expect(viewModel.state == .loading)
+
+        await controlledLoad.succeed(
+            invocation: 2,
+            with: [item]
+        )
+        await refresh.value
+
+        #expect(viewModel.state == .empty)
+    }
+
+    @Test
+    func mutationDuringRefreshPreventsStaleFailureFromReplacingContent() async {
+        let item = makeItem(title: "Refresh failure")
+        let controlledLoad = ControlledLoad()
+        let viewModel = TodoListViewModel(
+            loadTodosUseCase: LoadTodosUseCaseStub {
+                try await controlledLoad.execute()
+            },
+            toggleTodoStatusUseCase: ToggleTodoStatusUseCaseStub(
+                update: { _ in }
+            ),
+            deleteTodoUseCase: DeleteTodoUseCaseStub(
+                delete: { _ in }
+            )
+        )
+
+        let initialLoad = Task {
+            await viewModel.load()
+        }
+        await controlledLoad.waitForStartCount(1)
+        await controlledLoad.succeed(
+            invocation: 1,
+            with: [item]
+        )
+        await initialLoad.value
+
+        let refresh = Task {
+            await viewModel.load()
+        }
+        await controlledLoad.waitForStartCount(2)
+
+        await viewModel.toggleStatus(for: item)
+        await controlledLoad.fail(invocation: 2)
+        await refresh.value
+
+        let expectedItem = TodoItem(
+            id: item.id,
+            title: item.title,
+            details: item.details,
+            createdAt: item.createdAt,
+            status: .completed
+        )
+
+        #expect(viewModel.state == .content([expectedItem]))
+    }
+
+    @Test
     func searchFiltersItemsByTitleAndDetailsIgnoringCase() async {
         let firstItem = TodoItem(
             id: UUID(),
@@ -279,17 +658,17 @@ struct TodoListViewModelTests {
             status: .completed
         )
         
-        let useCase = LoadTodosUseCase {
+        let useCase = LoadTodosUseCaseStub {
             [firstItem, secondItem]
         }
         
         let viewModel = TodoListViewModel(
             loadTodosUseCase: useCase,
             toggleTodoStatusUseCase:
-                ToggleTodoStatusUseCase(
+                ToggleTodoStatusUseCaseStub(
                     update: { _ in }
                 ),
-            deleteTodoUseCase: DeleteTodoUseCase(
+            deleteTodoUseCase: DeleteTodoUseCaseStub(
                 delete: { _ in }
             )
         )
@@ -320,6 +699,66 @@ struct TodoListViewModelTests {
     }
     
     @Test
+    func rapidSearchUpdatesPublishOnlyLatestResult() async {
+        let firstItem = TodoItem(
+            id: UUID(),
+            title: "Buy milk",
+            details: "Two cartons",
+            createdAt: Date(
+                timeIntervalSince1970: 1_700_000_000
+            ),
+            status: .pending
+        )
+
+        let secondItem = TodoItem(
+            id: UUID(),
+            title: "Clean apartment",
+            details: "Kitchen and bathroom",
+            createdAt: Date(
+                timeIntervalSince1970: 1_800_000_000
+            ),
+            status: .completed
+        )
+
+        let viewModel = makeViewModel(
+            items: [firstItem, secondItem]
+        )
+
+        await viewModel.load()
+
+        var receivedStates: [
+            TodoListViewModel.State
+        ] = []
+
+        await withCheckedContinuation { continuation in
+            var didResume = false
+
+            viewModel.onStateChange = { state in
+                receivedStates.append(state)
+
+                guard
+                    !didResume,
+                    state == .content([secondItem])
+                else {
+                    return
+                }
+
+                didResume = true
+                continuation.resume()
+            }
+
+            viewModel.updateSearchQuery("milk")
+            viewModel.updateSearchQuery("bathroom")
+        }
+
+        #expect(
+            receivedStates == [
+                .content([secondItem])
+            ]
+        )
+    }
+
+    @Test
     func clearingSearchRestoresAllLoadedItems() async {
         let items = [
             TodoItem(
@@ -342,17 +781,17 @@ struct TodoListViewModelTests {
             )
         ]
         
-        let useCase = LoadTodosUseCase {
+        let useCase = LoadTodosUseCaseStub {
             items
         }
         
         let viewModel = TodoListViewModel(
             loadTodosUseCase: useCase,
             toggleTodoStatusUseCase:
-                ToggleTodoStatusUseCase(
+                ToggleTodoStatusUseCaseStub(
                     update: { _ in }
                 ),
-            deleteTodoUseCase: DeleteTodoUseCase(
+            deleteTodoUseCase: DeleteTodoUseCaseStub(
                 delete: { _ in }
             )
         )
@@ -377,17 +816,17 @@ struct TodoListViewModelTests {
             status: .pending
         )
         
-        let useCase = LoadTodosUseCase {
+        let useCase = LoadTodosUseCaseStub {
             [item]
         }
         
         let viewModel = TodoListViewModel(
             loadTodosUseCase: useCase,
             toggleTodoStatusUseCase:
-                ToggleTodoStatusUseCase(
+                ToggleTodoStatusUseCaseStub(
                     update: { _ in }
                 ),
-            deleteTodoUseCase: DeleteTodoUseCase(
+            deleteTodoUseCase: DeleteTodoUseCaseStub(
                 delete: { _ in }
             )
         )
@@ -429,14 +868,14 @@ struct TodoListViewModelTests {
         )
 
         let viewModel = TodoListViewModel(
-            loadTodosUseCase: LoadTodosUseCase {
+            loadTodosUseCase: LoadTodosUseCaseStub {
                 [firstItem, secondItem]
             },
             toggleTodoStatusUseCase:
-                ToggleTodoStatusUseCase(
+                ToggleTodoStatusUseCaseStub(
                     update: { _ in }
                 ),
-            deleteTodoUseCase: DeleteTodoUseCase(
+            deleteTodoUseCase: DeleteTodoUseCaseStub(
                 delete: { _ in }
             )
         )
@@ -488,16 +927,16 @@ struct TodoListViewModelTests {
         )
 
         let viewModel = TodoListViewModel(
-            loadTodosUseCase: LoadTodosUseCase {
+            loadTodosUseCase: LoadTodosUseCaseStub {
                 [item]
             },
             toggleTodoStatusUseCase:
-                ToggleTodoStatusUseCase(
+                ToggleTodoStatusUseCaseStub(
                     update: { _ in
                         throw TestError.updateFailed
                     }
                 ),
-            deleteTodoUseCase: DeleteTodoUseCase(
+            deleteTodoUseCase: DeleteTodoUseCaseStub(
                 delete: { _ in }
             )
         )
@@ -541,15 +980,15 @@ struct TodoListViewModelTests {
         )
 
         let viewModel = TodoListViewModel(
-            loadTodosUseCase: LoadTodosUseCase {
+            loadTodosUseCase: LoadTodosUseCaseStub {
                 [firstItem, secondItem]
             },
             toggleTodoStatusUseCase:
-                ToggleTodoStatusUseCase(
+                ToggleTodoStatusUseCaseStub(
                     update: { _ in }
                 ),
             deleteTodoUseCase:
-                DeleteTodoUseCase(
+                DeleteTodoUseCaseStub(
                     delete: { _ in }
                 )
         )
@@ -591,15 +1030,15 @@ struct TodoListViewModelTests {
         )
 
         let viewModel = TodoListViewModel(
-            loadTodosUseCase: LoadTodosUseCase {
+            loadTodosUseCase: LoadTodosUseCaseStub {
                 [item]
             },
             toggleTodoStatusUseCase:
-                ToggleTodoStatusUseCase(
+                ToggleTodoStatusUseCaseStub(
                     update: { _ in }
                 ),
             deleteTodoUseCase:
-                DeleteTodoUseCase(
+                DeleteTodoUseCaseStub(
                     delete: { _ in }
                 )
         )
@@ -627,15 +1066,15 @@ struct TodoListViewModelTests {
         )
 
         let viewModel = TodoListViewModel(
-            loadTodosUseCase: LoadTodosUseCase {
+            loadTodosUseCase: LoadTodosUseCaseStub {
                 [item]
             },
             toggleTodoStatusUseCase:
-                ToggleTodoStatusUseCase(
+                ToggleTodoStatusUseCaseStub(
                     update: { _ in }
                 ),
             deleteTodoUseCase:
-                DeleteTodoUseCase(
+                DeleteTodoUseCaseStub(
                     delete: { _ in
                         throw TestError.deleteFailed
                     }
@@ -656,6 +1095,148 @@ struct TodoListViewModelTests {
             viewModel.state == .content([item])
         )
         #expect(receivedError == .deleteFailed)
+    }
+
+    @Test
+    func toggleCancellationKeepsCurrentItemsWithoutReportingFailure() async {
+        let item = makeItem(title: "Cancelled toggle")
+        let viewModel = makeViewModel(
+            items: [item],
+            update: { _ in
+                throw CancellationError()
+            }
+        )
+        var receivedError: TodoListViewModel.ActionError?
+        viewModel.onActionError = { error in
+            receivedError = error
+        }
+
+        await viewModel.load()
+        await viewModel.toggleStatus(for: item)
+
+        #expect(viewModel.state == .content([item]))
+        #expect(receivedError == nil)
+    }
+
+    @Test
+    func deleteCancellationKeepsCurrentItemsWithoutReportingFailure() async {
+        let item = makeItem(title: "Cancelled delete")
+        let viewModel = makeViewModel(
+            items: [item],
+            delete: { _ in
+                throw CancellationError()
+            }
+        )
+        var receivedError: TodoListViewModel.ActionError?
+        viewModel.onActionError = { error in
+            receivedError = error
+        }
+
+        await viewModel.load()
+        await viewModel.delete(item)
+
+        #expect(viewModel.state == .content([item]))
+        #expect(receivedError == nil)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func cancelledToggleWithLateFailureDoesNotReportErrorAndAllowsRetry() async {
+        let item = makeItem(title: "Cancelled toggle retry")
+        let mutation = SuspendedMutation(
+            suspendedIDs: [item.id]
+        )
+        let attempts = Mutex(0)
+        let viewModel = makeViewModel(
+            items: [item],
+            update: { updatedItem in
+                let attempt = attempts.withLock { count in
+                    count += 1
+                    return count
+                }
+
+                if attempt == 1 {
+                    await mutation.execute(id: updatedItem.id)
+                    throw ControlledLoadError.failed
+                }
+            }
+        )
+        var receivedError: TodoListViewModel.ActionError?
+        viewModel.onActionError = { error in
+            receivedError = error
+        }
+
+        await viewModel.load()
+
+        let toggle = Task {
+            await viewModel.toggleStatus(for: item)
+        }
+
+        await mutation.waitForStartCount(1)
+        toggle.cancel()
+        await mutation.release(id: item.id)
+        await toggle.value
+
+        #expect(viewModel.state == .content([item]))
+        #expect(receivedError == nil)
+
+        await viewModel.toggleStatus(for: item)
+
+        let toggledItem = TodoItem(
+            id: item.id,
+            title: item.title,
+            details: item.details,
+            createdAt: item.createdAt,
+            status: .completed
+        )
+
+        #expect(attempts.withLock { $0 } == 2)
+        #expect(viewModel.state == .content([toggledItem]))
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func cancelledDeleteWithLateFailureDoesNotReportErrorAndAllowsRetry() async {
+        let item = makeItem(title: "Cancelled delete retry")
+        let mutation = SuspendedMutation(
+            suspendedIDs: [item.id]
+        )
+        let attempts = Mutex(0)
+        let viewModel = makeViewModel(
+            items: [item],
+            delete: { id in
+                let attempt = attempts.withLock { count in
+                    count += 1
+                    return count
+                }
+
+                if attempt == 1 {
+                    await mutation.execute(id: id)
+                    throw ControlledLoadError.failed
+                }
+            }
+        )
+        var receivedError: TodoListViewModel.ActionError?
+        viewModel.onActionError = { error in
+            receivedError = error
+        }
+
+        await viewModel.load()
+
+        let delete = Task {
+            await viewModel.delete(item)
+        }
+
+        await mutation.waitForStartCount(1)
+        delete.cancel()
+        await mutation.release(id: item.id)
+        await delete.value
+
+        #expect(viewModel.state == .content([item]))
+        #expect(receivedError == nil)
+
+        await viewModel.delete(item)
+
+        #expect(attempts.withLock { $0 } == 2)
+        #expect(viewModel.state == .empty)
     }
 
     @Test
@@ -698,14 +1279,16 @@ struct TodoListViewModelTests {
         let mutation = SuspendedMutation(
             suspendedIDs: [item.id]
         )
-        var deleteCallCount = 0
+        let deleteCallCount = Mutex(0)
         let viewModel = makeViewModel(
             items: [item],
             update: { item in
                 await mutation.execute(id: item.id)
             },
             delete: { _ in
-                deleteCallCount += 1
+                deleteCallCount.withLock {
+                    $0 += 1
+                }
             }
         )
         var receivedErrors: [TodoListViewModel.ActionError] = []
@@ -723,7 +1306,7 @@ struct TodoListViewModelTests {
         await mutation.waitForStartCount(1)
         await viewModel.delete(item)
 
-        #expect(deleteCallCount == 0)
+        #expect(deleteCallCount.withLock { $0 } == 0)
         #expect(receivedErrors == [.operationInProgress])
 
         await mutation.release(id: item.id)
@@ -736,11 +1319,13 @@ struct TodoListViewModelTests {
         let mutation = SuspendedMutation(
             suspendedIDs: [item.id]
         )
-        var updateCallCount = 0
+        let updateCallCount = Mutex(0)
         let viewModel = makeViewModel(
             items: [item],
             update: { _ in
-                updateCallCount += 1
+                updateCallCount.withLock {
+                    $0 += 1
+                }
             },
             delete: { id in
                 await mutation.execute(id: id)
@@ -761,7 +1346,7 @@ struct TodoListViewModelTests {
         await mutation.waitForStartCount(1)
         await viewModel.toggleStatus(for: item)
 
-        #expect(updateCallCount == 0)
+        #expect(updateCallCount.withLock { $0 } == 0)
         #expect(receivedErrors == [.operationInProgress])
 
         await mutation.release(id: item.id)
@@ -808,13 +1393,16 @@ struct TodoListViewModelTests {
         }
 
         let item = makeItem(title: "Retry mutation")
-        var updateAttemptCount = 0
+        let updateAttemptCount = Mutex(0)
         let viewModel = makeViewModel(
             items: [item],
             update: { _ in
-                updateAttemptCount += 1
+                let attempt = updateAttemptCount.withLock { count in
+                    count += 1
+                    return count
+                }
 
-                if updateAttemptCount == 1 {
+                if attempt == 1 {
                     throw TestError.updateFailed
                 }
             }
@@ -824,7 +1412,7 @@ struct TodoListViewModelTests {
         await viewModel.toggleStatus(for: item)
         await viewModel.toggleStatus(for: item)
 
-        #expect(updateAttemptCount == 2)
+        #expect(updateAttemptCount.withLock { $0 } == 2)
         #expect(
             viewModel.state == .content([
                 TodoItem(

@@ -4,25 +4,41 @@ enum CreateTodoUseCaseError: Error, Equatable, Sendable {
     case emptyTitle
 }
 
-struct CreateTodoUseCase {
+protocol CreateTodoUseCaseProtocol: Sendable {
+    func makeDraft() -> NewTodoDraft
 
-    typealias Create = (TodoItem) async throws -> Void
+    func execute(
+        draft: NewTodoDraft,
+        title: String,
+        details: String
+    ) async throws -> TodoItem
+}
 
-    private let create: Create
-    private let makeID: () -> UUID
-    private let currentDate: () -> Date
+struct CreateTodoUseCase<Repository: TodoRepository>: CreateTodoUseCaseProtocol {
+
+    private let repository: Repository
+    private let makeID: @Sendable () -> UUID
+    private let currentDate: @Sendable () -> Date
 
     init(
-        create: @escaping Create,
-        makeID: @escaping () -> UUID = UUID.init,
-        currentDate: @escaping () -> Date = Date.init
+        repository: Repository,
+        makeID: @escaping @Sendable () -> UUID = { UUID() },
+        currentDate: @escaping @Sendable () -> Date = { Date() }
     ) {
-        self.create = create
+        self.repository = repository
         self.makeID = makeID
         self.currentDate = currentDate
     }
 
+    func makeDraft() -> NewTodoDraft {
+        NewTodoDraft(
+            id: makeID(),
+            createdAt: currentDate()
+        )
+    }
+
     func execute(
+        draft: NewTodoDraft,
         title: String,
         details: String
     ) async throws -> TodoItem {
@@ -35,17 +51,16 @@ struct CreateTodoUseCase {
         }
 
         let item = TodoItem(
-            id: makeID(),
+            id: draft.id,
             title: normalizedTitle,
             details: details.trimmingCharacters(
                 in: .whitespacesAndNewlines
             ),
-            createdAt: currentDate(),
+            createdAt: draft.createdAt,
             status: .pending
         )
 
-        try await create(item)
-
+        try await repository.create(item)
         return item
     }
 }

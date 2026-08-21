@@ -1,11 +1,11 @@
 import Foundation
 
-struct TodosAPI {
+struct TodosAPI: TodosFetching {
 
-    private let session: URLSession
+    private let session: any NetworkSession
 
     init(
-        session: URLSession = .shared
+        session: any NetworkSession = URLSession.shared
     ) {
         self.session = session
     }

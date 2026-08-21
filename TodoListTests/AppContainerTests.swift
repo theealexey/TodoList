@@ -1,163 +1,144 @@
+import Foundation
+import Synchronization
 import Testing
 @testable import TodoList
 
-@MainActor
+@Suite
 struct AppContainerTests {
 
     @Test
-    func concurrentPrepareSharesSingleInFlightPreparation() async throws {
-        let preparation = SuspendedPreparation()
+    func usesInjectedInfrastructureContracts() async throws {
+        let storage = StorageSpy()
+        let todosFetcher = TodosFetcherSpy(
+            todos: [
+                TodoDTO(
+                    id: 1,
+                    todo: "Injected todo",
+                    completed: true
+                )
+            ]
+        )
+        let importStateStore = ImportStateStoreSpy()
+        let storeIdentifier = "test-store"
 
-        let container = AppContainer(
-            coreDataStack: CoreDataStack(inMemory: true),
-            coreDataPreparation: {
-                await preparation.run()
-            }
+        let appContainer = AppContainer(
+            storage: storage,
+            storeIdentifier: storeIdentifier,
+            todosFetcher: todosFetcher,
+            importStateStore: importStateStore
         )
 
-        let firstTask = Task { @MainActor in
-            try await container.prepare()
-        }
+        let items = try await appContainer
+            .todoRepository
+            .loadTodos()
 
-        await preparation.waitUntilStarted()
+        let item = try #require(items.first)
 
-        let secondStartSignal = StartSignal()
-
-        let secondTask = Task { @MainActor in
-            secondStartSignal.markStarted()
-            try await container.prepare()
-        }
-
-        await secondStartSignal.waitUntilStarted()
-
-        let inFlightCallCount = await preparation.callCount
-
-        #expect(inFlightCallCount == 1)
-
-        await preparation.finishAll()
-
-        try await firstTask.value
-        try await secondTask.value
-
-        let finalCallCount = await preparation.callCount
-
-        #expect(finalCallCount == 1)
+        #expect(await todosFetcher.callCount() == 1)
+        #expect(await storage.importCallCount() == 1)
+        #expect(await storage.fetchCallCount() == 1)
+        #expect(importStateStore.isCompleted(for: storeIdentifier))
+        #expect(item.title == "Injected todo")
+        #expect(item.status == .completed)
     }
 
-    @Test
-    func prepareRetriesAfterFailure() async throws {
-        let preparation = FailingOncePreparation()
+    private actor TodosFetcherSpy: TodosFetching {
 
-        let container = AppContainer(
-            coreDataStack: CoreDataStack(inMemory: true),
-            coreDataPreparation: {
-                try await preparation.run()
+        private let todos: [TodoDTO]
+        private var numberOfCalls = 0
+
+        init(todos: [TodoDTO]) {
+            self.todos = todos
+        }
+
+        func fetchTodos() async throws -> [TodoDTO] {
+            numberOfCalls += 1
+            return todos
+        }
+
+        func callCount() -> Int {
+            numberOfCalls
+        }
+    }
+
+    private actor StorageSpy: TodoStoring, TodoImportStoring {
+
+        private var items: [TodoItem] = []
+        private var numberOfImportCalls = 0
+        private var numberOfFetchCalls = 0
+
+        func create(_ item: TodoItem) async throws {
+            items.append(item)
+        }
+
+        func update(_ item: TodoItem) async throws {
+            guard let index = items.firstIndex(
+                where: { $0.id == item.id }
+            ) else {
+                throw TodoStorageError.todoNotFound(id: item.id)
             }
-        )
 
-        do {
-            try await container.prepare()
-
-            Issue.record(
-                "Expected the first preparation to fail"
-            )
-        } catch PreparationFailure.expected {
-            // Expected failure.
-        } catch {
-            Issue.record(
-                "Unexpected error: \(error)"
-            )
+            items[index] = item
         }
 
-        try await container.prepare()
+        func delete(id: UUID) async throws {
+            guard let index = items.firstIndex(
+                where: { $0.id == id }
+            ) else {
+                throw TodoStorageError.todoNotFound(id: id)
+            }
 
-        let callCount = await preparation.callCount
-
-        #expect(callCount == 2)
-    }
-}
-
-@MainActor
-private final class StartSignal {
-
-    private var isStarted = false
-    private var continuation: CheckedContinuation<Void, Never>?
-
-    func markStarted() {
-        isStarted = true
-        continuation?.resume()
-        continuation = nil
-    }
-
-    func waitUntilStarted() async {
-        guard !isStarted else {
-            return
+            items.remove(at: index)
         }
 
-        await withCheckedContinuation { continuation in
-            self.continuation = continuation
-        }
-    }
-}
-
-private actor SuspendedPreparation {
-
-    private(set) var callCount = 0
-
-    private var continuations:
-        [CheckedContinuation<Void, Never>] = []
-
-    private var startContinuations:
-        [CheckedContinuation<Void, Never>] = []
-
-    func run() async {
-        callCount += 1
-
-        let pendingStartContinuations = startContinuations
-        startContinuations.removeAll()
-
-        pendingStartContinuations.forEach {
-            $0.resume()
+        func fetchAll() async throws -> [TodoItem] {
+            numberOfFetchCalls += 1
+            return items
         }
 
-        await withCheckedContinuation { continuation in
-            continuations.append(continuation)
+        func importTodos(
+            _ records: [TodoImportRecord],
+            importedAt: Date
+        ) async throws {
+            numberOfImportCalls += 1
+
+            items = records.map { record in
+                TodoItem(
+                    id: UUID(),
+                    title: record.title,
+                    details: "",
+                    createdAt: importedAt,
+                    status: record.isCompleted
+                        ? .completed
+                        : .pending
+                )
+            }
+        }
+
+        func importCallCount() -> Int {
+            numberOfImportCalls
+        }
+
+        func fetchCallCount() -> Int {
+            numberOfFetchCalls
         }
     }
 
-    func waitUntilStarted() async {
-        guard callCount == 0 else {
-            return
+    private final class ImportStateStoreSpy:
+        InitialTodoImportStateStoring {
+
+        private let completedStoreIdentifier = Mutex<String?>(nil)
+
+        func isCompleted(for storeIdentifier: String) -> Bool {
+            completedStoreIdentifier.withLock {
+                $0 == storeIdentifier
+            }
         }
 
-        await withCheckedContinuation { continuation in
-            startContinuations.append(continuation)
-        }
-    }
-
-    func finishAll() {
-        let pendingContinuations = continuations
-        continuations.removeAll()
-
-        pendingContinuations.forEach {
-            $0.resume()
-        }
-    }
-}
-
-private actor FailingOncePreparation {
-
-    private(set) var callCount = 0
-
-    func run() async throws {
-        callCount += 1
-
-        if callCount == 1 {
-            throw PreparationFailure.expected
+        func markCompleted(for storeIdentifier: String) {
+            completedStoreIdentifier.withLock {
+                $0 = storeIdentifier
+            }
         }
     }
-}
-
-private enum PreparationFailure: Error {
-    case expected
 }

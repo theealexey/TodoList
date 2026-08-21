@@ -5,137 +5,106 @@ import Testing
 @Suite
 struct UpdateTodoUseCaseTests {
 
-    private actor UpdateSpy {
+    private enum TestError: Error, Equatable, Sendable {
+        case updateFailed
+    }
 
-        private var receivedItems: [TodoItem] = []
+    private actor RepositorySpy: TodoRepository {
+        private let shouldFail: Bool
+        private var updatedItems: [TodoItem] = []
 
-        func update(_ item: TodoItem) {
-            receivedItems.append(item)
+        init(shouldFail: Bool = false) {
+            self.shouldFail = shouldFail
         }
 
+        func loadTodos() async throws -> [TodoItem] { [] }
+        func create(_ item: TodoItem) async throws {}
+
+        func update(_ item: TodoItem) async throws {
+            if shouldFail {
+                throw TestError.updateFailed
+            }
+            updatedItems.append(item)
+        }
+
+        func delete(id: UUID) async throws {}
+
         func items() -> [TodoItem] {
-            receivedItems
+            updatedItems
         }
     }
 
     @Test
     func executeUpdatesTextAndPreservesTodoIdentity() async throws {
-        let originalItem = TodoItem(
-            id: UUID(),
-            title: "Old title",
-            details: "Old details",
-            createdAt: Date(
-                timeIntervalSince1970: 1_700_000_000
-            ),
-            status: .completed
-        )
-
-        let spy = UpdateSpy()
-
-        let useCase = UpdateTodoUseCase(
-            update: { item in
-                await spy.update(item)
-            }
-        )
+        let repository = RepositorySpy()
+        let useCase = UpdateTodoUseCase(repository: repository)
+        let item = Self.makeItem()
 
         let updatedItem = try await useCase.execute(
-            item: originalItem,
-            title: "  New title  ",
-            details: "  New details  "
+            item: item,
+            title: "  Updated title  ",
+            details: "  Updated details  "
         )
 
-        #expect(updatedItem.id == originalItem.id)
-        #expect(updatedItem.title == "New title")
-        #expect(updatedItem.details == "New details")
-        #expect(updatedItem.createdAt == originalItem.createdAt)
-        #expect(updatedItem.status == originalItem.status)
+        let expectedItem = TodoItem(
+            id: item.id,
+            title: "Updated title",
+            details: "Updated details",
+            createdAt: item.createdAt,
+            status: item.status
+        )
 
-        let receivedItems = await spy.items()
-
-        #expect(receivedItems == [updatedItem])
+        #expect(updatedItem == expectedItem)
+        #expect(await repository.items() == [expectedItem])
     }
 
     @Test
     func executeRejectsBlankTitleWithoutUpdatingTodo() async {
-        let originalItem = TodoItem(
-            id: UUID(),
-            title: "Original title",
-            details: "",
-            createdAt: Date(
-                timeIntervalSince1970: 1_700_000_000
-            ),
-            status: .pending
-        )
-
-        let spy = UpdateSpy()
-
-        let useCase = UpdateTodoUseCase(
-            update: { item in
-                await spy.update(item)
-            }
-        )
+        let repository = RepositorySpy()
+        let useCase = UpdateTodoUseCase(repository: repository)
 
         do {
             _ = try await useCase.execute(
-                item: originalItem,
-                title: "   \n ",
+                item: Self.makeItem(),
+                title: " \n ",
                 details: "Details"
             )
-
-            Issue.record(
-                "Expected emptyTitle error"
-            )
+            Issue.record("Expected an empty title error")
         } catch let error as UpdateTodoUseCaseError {
             #expect(error == .emptyTitle)
         } catch {
-            Issue.record(
-                "Received unexpected error: \(error)"
-            )
+            Issue.record("Received unexpected error: \(error)")
         }
 
-        let receivedItems = await spy.items()
-
-        #expect(receivedItems.isEmpty)
+        #expect(await repository.items().isEmpty)
     }
 
     @Test
     func executePropagatesUpdateError() async {
-        enum TestError: Error, Equatable {
-            case updateFailed
-        }
-
-        let originalItem = TodoItem(
-            id: UUID(),
-            title: "Original title",
-            details: "",
-            createdAt: Date(
-                timeIntervalSince1970: 1_700_000_000
-            ),
-            status: .pending
-        )
-
-        let useCase = UpdateTodoUseCase(
-            update: { _ in
-                throw TestError.updateFailed
-            }
-        )
+        let repository = RepositorySpy(shouldFail: true)
+        let useCase = UpdateTodoUseCase(repository: repository)
 
         do {
             _ = try await useCase.execute(
-                item: originalItem,
+                item: Self.makeItem(),
                 title: "Updated title",
-                details: ""
+                details: "Details"
             )
-
-            Issue.record(
-                "Expected updateFailed error"
-            )
+            Issue.record("Expected update to fail")
         } catch let error as TestError {
             #expect(error == .updateFailed)
         } catch {
-            Issue.record(
-                "Received unexpected error: \(error)"
-            )
+            Issue.record("Received unexpected error: \(error)")
         }
+    }
+
+    private static func makeItem() -> TodoItem {
+        TodoItem(
+            id: UUID(),
+            title: "Original",
+            details: "Original details",
+            createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+            status: .completed
+        )
     }
 }

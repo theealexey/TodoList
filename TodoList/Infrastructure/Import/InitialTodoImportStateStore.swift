@@ -1,26 +1,31 @@
 import Foundation
 
-struct InitialTodoImportStateStore {
+struct InitialTodoImportStateStore: InitialTodoImportStateStoring {
 
-    private enum Key {
-        static let isCompleted =
-            "InitialTodoImporter.isCompleted"
+    private static let defaultKey =
+        "InitialTodoImporter.completedStoreIdentifier"
+
+    private let completedStoreIdentifierKey: String
+
+    init(namespace: String? = nil) {
+        if let namespace {
+            completedStoreIdentifierKey =
+                "\(namespace).completedStoreIdentifier"
+        } else {
+            completedStoreIdentifierKey = Self.defaultKey
+        }
     }
 
-    private let defaults: UserDefaults
-
-    init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
+    func isCompleted(for storeIdentifier: String) -> Bool {
+        UserDefaults.standard.string(
+            forKey: completedStoreIdentifierKey
+        ) == storeIdentifier
     }
 
-    var isCompleted: Bool {
-        defaults.bool(forKey: Key.isCompleted)
-    }
-
-    func markCompleted() {
-        defaults.set(
-            true,
-            forKey: Key.isCompleted
+    func markCompleted(for storeIdentifier: String) {
+        UserDefaults.standard.set(
+            storeIdentifier,
+            forKey: completedStoreIdentifierKey
         )
     }
 }

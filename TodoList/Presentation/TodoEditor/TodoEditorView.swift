@@ -9,9 +9,6 @@ final class TodoEditorView: UIView {
         let dateText: String
     }
 
-    var onTitleChange: ((String) -> Void)?
-    var onDetailsChange: ((String) -> Void)?
-
     var titleText: String {
         titleTextView.text
     }
@@ -374,12 +371,6 @@ extension TodoEditorView: UITextViewDelegate {
     ) {
         updatePlaceholders()
         hideValidationError()
-
-        if textView === titleTextView {
-            onTitleChange?(textView.text)
-        } else if textView === detailsTextView {
-            onDetailsChange?(textView.text)
-        }
     }
 
     func textView(

@@ -1,57 +1,49 @@
 import UIKit
 
-@MainActor
-struct TodoListAssembly {
+struct TodoListAssembly<Repository: TodoRepository> {
 
-    private let container: AppContainer
+    private let repository: Repository
 
-    init(container: AppContainer) {
-        self.container = container
+    init(repository: Repository) {
+        self.repository = repository
     }
 
+    @MainActor
     func makeViewController() -> TodoListViewController {
-        let loadTodosUseCase = LoadTodosUseCase {
-            try await container.prepare()
+        let loadTodosUseCase = LoadTodosUseCase(
+            repository: repository
+        )
 
-            return try await container
-                .todoRepository
-                .loadTodos()
-        }
-
-        let toggleTodoStatusUseCase =
-            ToggleTodoStatusUseCase(
-                update: { item in
-                    try await container.prepare()
-
-                    try await container
-                        .todoRepository
-                        .update(item)
-                }
-            )
+        let toggleTodoStatusUseCase = ToggleTodoStatusUseCase(
+            repository: repository
+        )
 
         let deleteTodoUseCase = DeleteTodoUseCase(
-            delete: { id in
-                try await container.prepare()
-
-                try await container
-                    .todoRepository
-                    .delete(id: id)
-            }
+            repository: repository
         )
 
         let viewModel = TodoListViewModel(
             loadTodosUseCase: loadTodosUseCase,
-            toggleTodoStatusUseCase:
-                toggleTodoStatusUseCase,
-            deleteTodoUseCase:
-                deleteTodoUseCase
+            toggleTodoStatusUseCase: toggleTodoStatusUseCase,
+            deleteTodoUseCase: deleteTodoUseCase
         )
 
         let viewController = TodoListViewController(
             viewModel: viewModel
         )
 
-        let editorAssembly = makeEditorAssembly()
+        let createTodoUseCase = CreateTodoUseCase(
+            repository: repository
+        )
+
+        let updateTodoUseCase = UpdateTodoUseCase(
+            repository: repository
+        )
+
+        let editorAssembly = TodoEditorAssembly(
+            createTodoUseCase: createTodoUseCase,
+            updateTodoUseCase: updateTodoUseCase
+        )
 
         configureEditorFlows(
             for: viewController,
@@ -61,48 +53,13 @@ struct TodoListAssembly {
         return viewController
     }
 
-    private func makeEditorAssembly()
-        -> TodoEditorAssembly {
-        let createTodoUseCase = CreateTodoUseCase(
-            create: { item in
-                try await container.prepare()
-
-                try await container
-                    .todoRepository
-                    .create(item)
-            }
-        )
-
-        let updateTodoUseCase = UpdateTodoUseCase(
-            update: { item in
-                try await container.prepare()
-
-                try await container
-                    .todoRepository
-                    .update(item)
-            }
-        )
-
-        return TodoEditorAssembly(
-            create: { title, details in
-                try await createTodoUseCase.execute(
-                    title: title,
-                    details: details
-                )
-            },
-            update: { item, title, details in
-                try await updateTodoUseCase.execute(
-                    item: item,
-                    title: title,
-                    details: details
-                )
-            }
-        )
-    }
-
-    private func configureEditorFlows(
+    @MainActor
+    private func configureEditorFlows<
+        CreateUseCase: CreateTodoUseCaseProtocol,
+        UpdateUseCase: UpdateTodoUseCaseProtocol
+    >(
         for viewController: TodoListViewController,
-        editorAssembly: TodoEditorAssembly
+        editorAssembly: TodoEditorAssembly<CreateUseCase, UpdateUseCase>
     ) {
         viewController.onAddTodo = {
             [weak viewController] in
@@ -112,9 +69,8 @@ struct TodoListAssembly {
             }
 
             let editorViewController =
-                editorAssembly.makeCreateViewController(
-                    createdAt: Date()
-                ) { [weak viewController] _ in
+                editorAssembly.makeCreateViewController {
+                    [weak viewController] _ in
                     viewController?.reloadTodos()
                 }
 
